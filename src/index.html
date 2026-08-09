@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>feier-two 🥰</title>
+  <link rel="stylesheet" href="styles/terminal.css">
+  <link rel="stylesheet" href="vendor/xterm.css">
+</head>
+<body>
+  <!-- 标题栏（可拖拽） -->
+  <div class="titlebar" data-tauri-drag-region>
+    <div class="titlebar-title">feier-one 🥰</div>
+    <div class="titlebar-opacity">
+      <input type="range" id="opacity-slider" min="10" max="100" value="85" title="窗口透明度">
+      <span id="opacity-value">85%</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="btn-settings" id="titlebar-settings" title="设置">⚙</button>
+      <button class="btn-minimize" id="titlebar-minimize">−</button>
+      <button class="btn-maximize" id="titlebar-maximize">□</button>
+      <button class="btn-close" id="titlebar-close">×</button>
+    </div>
+  </div>
+
+  <!-- 主内容区 -->
+  <div class="main-content">
+    <!-- 终端区域 -->
+    <div class="terminal" id="terminal">
+      <div class="terminal-output" id="output">
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/xterm-addon-fit.js"></script>
+  <script src="scripts/terminal.js"></script>
+</body>
+</html>

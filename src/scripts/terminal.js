@@ -1,0 +1,542 @@
+// feier-three (v3) 终端：多 panel —— 每个 panel 一个 xterm.js + 一个 ConPTY shell 会话
+const { appWindow } = window.__TAURI__.window;
+const { invoke } = window.__TAURI__.tauri;
+const { listen } = window.__TAURI__.event;
+
+const terminalRoot = document.getElementById('terminal');
+const opacitySlider = document.getElementById('opacity-slider');
+const opacityValue = document.getElementById('opacity-value');
+
+// 标签栏 + 面板区（terminalRoot 内：tabbar 顶部，panel-area 填充）
+const tabbar = document.createElement('div');
+tabbar.className = 'tabbar';
+const panelArea = document.createElement('div');
+panelArea.className = 'panel-area';
+terminalRoot.appendChild(tabbar);
+terminalRoot.appendChild(panelArea);
+
+// ---------- Panel 管理 ----------
+let panelSeq = 0;
+const panels = new Map(); // id -> { id, term, fit, container, outBuf, exited }
+let currentPanelId = null;
+let tabs = [];
+let activeTabId = null;
+let tabSeq = 0;
+
+function newPanelId() {
+  return `panel-${++panelSeq}`;
+}
+
+// 创建一个 panel：容器 + xterm + 会话
+function createPanel(id) {
+  const container = document.createElement('div');
+  container.className = 'panel';
+
+  const term = new Terminal({
+    cursorBlink: true,
+    fontSize: SETTINGS.fontSize,
+    fontFamily: SETTINGS.fontFamily,
+    allowTransparency: true,
+    scrollback: 5000,
+    theme: {
+      background: hexToRgba(SETTINGS.bg, 0.7),
+      foreground: SETTINGS.fg,
+      cursor: SETTINGS.cursor,
+      selectionBackground: hexToRgba(SETTINGS.cursor, 0.25)
+    }
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(container);
+  fit.fit();
+
+  // IME 缓解：xterm 5.3 宽字符 composition 提交时会有一帧渲染偏移（横移一个汉字宽）。
+  // 合成结束立即强制全量重绘，尽快回到正确画面。
+  const ta = term.textarea;
+  if (ta) {
+    ta.addEventListener('compositionend', () => {
+      try { term.refresh(0, term.rows - 1); } catch (_) { /* 尺寸未就绪 */ }
+    });
+  }
+
+  const panel = { id, term, fit, container, outBuf: '', exited: false, starting: false };
+  panels.set(id, panel);
+
+  // 输入 → 对应会话（退出后按任意键重启，防重入）
+  term.onData((data) => {
+    if (panel.exited) {
+      if (panel.starting) return;
+      panel.exited = false;
+      panel.starting = true;
+      invoke('shell_start', { sessionId: id, rows: term.rows, cols: term.cols })
+        .then(() => { panel.starting = false; })
+        .catch((err) => {
+          panel.starting = false;
+          term.write(`\r\n\x1b[31m重启 shell 失败: ${err}\x1b[0m\r\n`);
+        });
+      return;
+    }
+    invoke('shell_write', { sessionId: id, data });
+  });
+
+  // 尺寸变化 → 后端
+  term.onResize(({ rows, cols }) => {
+    invoke('shell_resize', { sessionId: id, rows, cols });
+  });
+
+  // 点击聚焦
+  container.addEventListener('mousedown', () => focusPanel(id));
+
+  // 启动会话
+  panel.starting = true;
+  invoke('shell_start', { sessionId: id, rows: term.rows, cols: term.cols })
+    .then(() => { panel.starting = false; })
+    .catch((err) => {
+      panel.starting = false;
+      term.write(`\r\n\x1b[31m启动 shell 失败: ${err}\x1b[0m\r\n`);
+    });
+
+  return panel;
+}
+
+// 聚焦某个 panel
+function focusPanel(id) {
+  const p = panels.get(id);
+  if (!p) return;
+  currentPanelId = id;
+  for (const pp of panels.values()) {
+    pp.container.classList.toggle('active', pp.id === id);
+  }
+  p.term.focus();
+}
+
+// ---------- Tab 管理（每个 tab 一个独立 layout，panel 全局存活） ----------
+function newTabId() { return `tab-${++tabSeq}`; }
+
+function currentTab() {
+  return tabs.find((t) => t.id === activeTabId);
+}
+
+function collectPanelIds(node, acc = []) {
+  if (!node) return acc;
+  if (node.panelId) { acc.push(node.panelId); return acc; }
+  for (const c of node.children) collectPanelIds(c, acc);
+  return acc;
+}
+
+function firstPanelId(node) {
+  if (!node) return null;
+  if (node.panelId) return node.panelId;
+  for (const c of node.children) {
+    const r = firstPanelId(c);
+    if (r) return r;
+  }
+  return null;
+}
+
+function createTab() {
+  const id = newTabId();
+  const panelId = newPanelId();
+  tabs.push({ id, layout: { panelId } });
+  activeTabId = id;
+  createPanel(panelId);
+  renderTabs();
+  render();
+  focusPanel(panelId);
+}
+
+function renderTabs() {
+  tabbar.innerHTML = '';
+  tabs.forEach((t, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (t.id === activeTabId ? ' active' : '');
+    btn.textContent = String(i + 1);
+    btn.title = t.id;
+    btn.addEventListener('click', () => switchTab(t.id));
+    tabbar.appendChild(btn);
+  });
+  const add = document.createElement('button');
+  add.className = 'tab add';
+  add.textContent = '+';
+  add.title = '新建 tab (Ctrl+Shift+T)';
+  add.addEventListener('click', () => createTab());
+  tabbar.appendChild(add);
+}
+
+function switchTab(id) {
+  if (id === activeTabId) return;
+  activeTabId = id;
+  renderTabs();
+  render();
+  const first = firstPanelId(currentTab().layout);
+  if (first) {
+    focusPanel(first);
+    // 切回时把该 tab 所有 panel 滚动到底部，避免手动拖
+    collectPanelIds(currentTab().layout).forEach((pid) => {
+      const p = panels.get(pid);
+      if (p) p.term.scrollToBottom();
+    });
+  }
+}
+
+function cycleTab(delta) {
+  if (tabs.length < 2) return;
+  const i = tabs.findIndex((t) => t.id === activeTabId);
+  switchTab(tabs[(i + delta + tabs.length) % tabs.length].id);
+}
+
+function closeTab() {
+  if (tabs.length <= 1) return; // 至少保留一个 tab
+  const idx = tabs.findIndex((t) => t.id === activeTabId);
+  const t = tabs[idx];
+  collectPanelIds(t.layout).forEach((id) => {
+    invoke('shell_stop', { sessionId: id });
+    panels.delete(id);
+  });
+  tabs.splice(idx, 1);
+  activeTabId = tabs[Math.max(0, idx - 1)].id;
+  renderTabs();
+  render();
+  const first = firstPanelId(currentTab().layout);
+  if (first) focusPanel(first);
+}
+
+// ---------- 布局树（二分分割：叶子 = panel，内点 = row/col 分割） ----------
+
+function render() {
+  panelArea.innerHTML = '';
+  const tab = currentTab();
+  if (tab) panelArea.appendChild(buildDom(tab.layout));
+  requestAnimationFrame(() => {
+    for (const p of panels.values()) safeFit(p);
+  });
+}
+
+function buildDom(node) {
+  if (!node) return document.createElement('div');
+  if (node.panelId) return panels.get(node.panelId).container;
+  const div = document.createElement('div');
+  div.className = 'split';
+  div.style.flexDirection = node.dir === 'row' ? 'row' : 'column';
+  for (const child of node.children) div.appendChild(buildDom(child));
+  return div;
+}
+
+function safeFit(p) {
+  if (p.container.offsetWidth > 0 && p.container.offsetHeight > 0) {
+    try { p.fit.fit(); } catch (_) { /* 尺寸未就绪 */ }
+  }
+}
+
+// 查找叶子节点及其父节点
+function findLeafParent(node, panelId, parent, idx) {
+  if (node.panelId) {
+    return node.panelId === panelId ? { node, parent, idx } : null;
+  }
+  for (let i = 0; i < node.children.length; i++) {
+    const r = findLeafParent(node.children[i], panelId, node, i);
+    if (r) return r;
+  }
+  return null;
+}
+
+// 分割当前 panel：dir='row' 左右 / 'col' 上下
+function splitPanel(dir) {
+  const cur = currentPanelId;
+  const tab = currentTab();
+  if (!cur || !tab) return;
+  const loc = findLeafParent(tab.layout, cur, null, -1);
+  if (!loc) return;
+  const newId = newPanelId();
+  const splitNode = { dir, children: [loc.node, { panelId: newId }] };
+  if (loc.parent) {
+    loc.parent.children[loc.idx] = splitNode;
+  } else {
+    tab.layout = splitNode;
+  }
+  createPanel(newId);
+  render();
+  focusPanel(newId);
+}
+
+// 关闭当前 panel（最后一个不允许关）
+function closePanel() {
+  const cur = currentPanelId;
+  const tab = currentTab();
+  if (!cur || !tab) return;
+  // tab 只剩一个 panel → 关闭整个 tab
+  if (collectPanelIds(tab.layout).length <= 1) {
+    closeTab();
+    return;
+  }
+  const loc = findLeafParent(tab.layout, cur, null, -1);
+  if (!loc) return;
+  invoke('shell_stop', { sessionId: cur });
+  panels.delete(cur);
+  if (loc.parent) {
+    loc.parent.children = [loc.parent.children[1 - loc.idx]];
+  } else {
+    tab.layout = null;
+  }
+  render();
+  const first = firstPanelId(tab.layout);
+  if (first) focusPanel(first);
+}
+
+// 切换聚焦（按插入顺序循环）
+function cycleFocus(delta) {
+  const ids = [...panels.keys()];
+  if (!ids.length) return;
+  const i = ids.indexOf(currentPanelId);
+  focusPanel(ids[(i + delta + ids.length) % ids.length]);
+}
+
+// ---------- 设置（字体/颜色/透明度，localStorage 持久化） ----------
+const DEFAULT_SETTINGS = {
+  opacity: 85,
+  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+  fontSize: 13,
+  fg: '#00ff88',
+  bg: '#141423',
+  cursor: '#00ff88'
+};
+
+let SETTINGS = (() => {
+  try {
+    const raw = localStorage.getItem('feier-settings');
+    if (raw) return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(raw));
+  } catch (_) { /* 忽略损坏数据 */ }
+  return Object.assign({}, DEFAULT_SETTINGS);
+})();
+
+function saveSettings() {
+  try { localStorage.setItem('feier-settings', JSON.stringify(SETTINGS)); } catch (_) {}
+}
+
+function hexToRgba(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return String(hex);
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
+function applySettings() {
+  const s = SETTINGS;
+  document.body.style.opacity = s.opacity / 100;
+  opacitySlider.value = s.opacity;
+  opacityValue.textContent = `${s.opacity}%`;
+  for (const p of panels.values()) {
+    p.term.options.fontFamily = s.fontFamily;
+    p.term.options.fontSize = s.fontSize;
+    p.term.options.theme = {
+      background: hexToRgba(s.bg, 0.7),
+      foreground: s.fg,
+      cursor: s.cursor,
+      selectionBackground: hexToRgba(s.cursor, 0.25)
+    };
+    try { p.fit.fit(); } catch (_) {}
+  }
+}
+
+// 设置面板（模态）
+const settingsOverlay = document.createElement('div');
+settingsOverlay.id = 'settings-overlay';
+settingsOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;display:none;align-items:center;justify-content:center;';
+settingsOverlay.innerHTML = `
+  <div class="settings-card">
+    <h3>⚙ 设置</h3>
+    <label class="setting-row">窗口透明度
+      <input type="range" id="set-opacity" min="10" max="100">
+      <span id="set-opacity-v" class="setting-v"></span>
+    </label>
+    <label class="setting-row">字体
+      <select id="set-font">
+        <option value='Consolas, Monaco, "Courier New", monospace'>Consolas</option>
+        <option value='"Microsoft YaHei", Consolas, monospace'>微软雅黑</option>
+        <option value='"Courier New", monospace'>Courier New</option>
+        <option value='monospace'>默认等宽</option>
+      </select>
+    </label>
+    <label class="setting-row">字号
+      <input type="range" id="set-fontsize" min="10" max="24">
+      <span id="set-fontsize-v" class="setting-v"></span>
+    </label>
+    <label class="setting-row">前景色 <input type="color" id="set-fg"></label>
+    <label class="setting-row">背景色 <input type="color" id="set-bg"></label>
+    <label class="setting-row">光标色 <input type="color" id="set-cursor"></label>
+    <div class="settings-actions">
+      <button id="set-reset">恢复默认</button>
+      <button id="set-close">关闭</button>
+    </div>
+  </div>
+`;
+document.body.appendChild(settingsOverlay);
+
+function syncSettingsPanel() {
+  const s = SETTINGS;
+  document.getElementById('set-opacity').value = s.opacity;
+  document.getElementById('set-opacity-v').textContent = `${s.opacity}%`;
+  document.getElementById('set-font').value = s.fontFamily;
+  document.getElementById('set-fontsize').value = s.fontSize;
+  document.getElementById('set-fontsize-v').textContent = `${s.fontSize}px`;
+  document.getElementById('set-fg').value = s.fg;
+  document.getElementById('set-bg').value = s.bg;
+  document.getElementById('set-cursor').value = s.cursor;
+}
+
+function openSettings() {
+  syncSettingsPanel();
+  settingsOverlay.style.display = 'flex';
+}
+
+function closeSettings() {
+  settingsOverlay.style.display = 'none';
+}
+
+document.getElementById('set-opacity').addEventListener('input', (e) => { SETTINGS.opacity = Number(e.target.value); applySettings(); saveSettings(); syncSettingsPanel(); });
+document.getElementById('set-font').addEventListener('change', (e) => { SETTINGS.fontFamily = e.target.value; applySettings(); saveSettings(); });
+document.getElementById('set-fontsize').addEventListener('input', (e) => { SETTINGS.fontSize = Number(e.target.value); applySettings(); saveSettings(); syncSettingsPanel(); });
+document.getElementById('set-fg').addEventListener('input', (e) => { SETTINGS.fg = e.target.value; applySettings(); saveSettings(); });
+document.getElementById('set-bg').addEventListener('input', (e) => { SETTINGS.bg = e.target.value; applySettings(); saveSettings(); });
+document.getElementById('set-cursor').addEventListener('input', (e) => { SETTINGS.cursor = e.target.value; applySettings(); saveSettings(); });
+document.getElementById('set-reset').addEventListener('click', () => { SETTINGS = Object.assign({}, DEFAULT_SETTINGS); applySettings(); saveSettings(); syncSettingsPanel(); });
+document.getElementById('set-close').addEventListener('click', closeSettings);
+
+// ---------- 输出路由（按 session_id 分发，含内置命令标记剥离） ----------
+function onShellOutput(sid, text) {
+  const p = panels.get(sid);
+  if (!p) return;
+  p.outBuf += text;
+  let idx;
+  while ((idx = p.outBuf.indexOf('\n')) !== -1) {
+    const line = p.outBuf.slice(0, idx);
+    p.outBuf = p.outBuf.slice(idx + 1);
+    if (line.startsWith('__FEIER__video:')) {
+      openVideo(line.slice(15).trim());
+    } else {
+      p.term.write(line + '\r\n');
+    }
+  }
+  // 残余无换行的内容：标记开头则等完整行，否则直接渲染（保持交互性）
+  if (p.outBuf) {
+    if (p.outBuf.startsWith('__FEIER__')) return;
+    p.term.write(p.outBuf);
+    p.outBuf = '';
+  }
+}
+
+// ---------- 初始化 ----------
+document.addEventListener('DOMContentLoaded', async () => {
+  // 标题栏
+  document.getElementById('titlebar-minimize').addEventListener('click', () => appWindow.minimize());
+  document.getElementById('titlebar-maximize').addEventListener('click', () => appWindow.toggleMaximize());
+  document.getElementById('titlebar-close').addEventListener('click', () => appWindow.close());
+  document.getElementById('titlebar-settings').addEventListener('click', openSettings);
+
+  // 透明度滑块（同步 SETTINGS）
+  opacitySlider.addEventListener('input', (e) => {
+    SETTINGS.opacity = Number(e.target.value);
+    applySettings();
+    saveSettings();
+  });
+  // 恢复持久化设置（含初始透明度）
+  applySettings();
+
+  // shell 输出流（按 session_id 路由）
+  await listen('shell-output', (event) => {
+    onShellOutput(event.payload.session_id, event.payload.text);
+  });
+
+  // shell 会话结束（静默标记，按任意键重启，无提示文字）
+  await listen('shell-exit', (event) => {
+    const p = panels.get(event.payload.session_id);
+    if (!p) return;
+    p.exited = true;
+  });
+
+  // 窗口缩放 → 所有 panel 自适应
+  window.addEventListener('resize', () => {
+    for (const p of panels.values()) p.fit.fit();
+  });
+
+  // 默认启动一个 tab（内含一个 panel）
+  createTab();
+});
+
+// ---------- 多 panel 快捷键（Ctrl+Shift 组合，capture 拦截） ----------
+document.addEventListener('keydown', (e) => {
+  // Tab 切换（Ctrl+Tab / Ctrl+Shift+Tab）
+  if (e.key === 'Tab' && e.ctrlKey) {
+    e.preventDefault();
+    cycleTab(e.shiftKey ? -1 : 1);
+    return;
+  }
+  if (!(e.ctrlKey && e.shiftKey)) return;
+  switch (e.key) {
+    case '\\':
+      e.preventDefault();
+      splitPanel('row');
+      break;
+    case '-':
+    case '_':
+      e.preventDefault();
+      splitPanel('col');
+      break;
+    case 'W':
+      e.preventDefault();
+      closePanel();
+      break;
+    case 'T':
+      e.preventDefault();
+      createTab();
+      break;
+    case 'Q':
+      e.preventDefault();
+      closeTab();
+      break;
+    case '[':
+      e.preventDefault();
+      cycleFocus(-1);
+      break;
+    case ']':
+      e.preventDefault();
+      cycleFocus(1);
+      break;
+  }
+}, true);
+
+// ---------- 视频播放（shell 函数 video <URL> 经标记触发） ----------
+const videoOverlay = document.createElement('div');
+videoOverlay.id = 'video-overlay';
+videoOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;';
+const videoEl = document.createElement('video');
+videoEl.controls = true;
+videoEl.autoplay = true;
+videoEl.style.cssText = 'max-width:92vw;max-height:78vh;background:#000;border-radius:6px;';
+const videoBar = document.createElement('div');
+videoBar.style.cssText = 'display:flex;align-items:center;gap:12px;color:#888;font-size:12px;';
+const videoClose = document.createElement('button');
+videoClose.textContent = '关闭';
+videoClose.onclick = () => { videoOverlay.style.display = 'none'; videoEl.pause(); };
+const videoHint = document.createElement('span');
+videoBar.appendChild(videoClose);
+videoBar.appendChild(videoHint);
+videoOverlay.appendChild(videoEl);
+videoOverlay.appendChild(videoBar);
+document.body.appendChild(videoOverlay);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    videoOverlay.style.display = 'none';
+    videoEl.pause();
+    settingsOverlay.style.display = 'none';
+  }
+});
+
+function openVideo(url) {
+  if (!url) return;
+  videoEl.src = url;
+  videoHint.textContent = url;
+  videoOverlay.style.display = 'flex';
+  videoEl.play().catch(() => {});
+}

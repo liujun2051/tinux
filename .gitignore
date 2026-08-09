@@ -1,0 +1,11 @@
+# 构建产物
+node_modules/
+src-tauri/target/
+
+# 运行时（纯源码仓库：winbox 自行构建，见 README "构建 winbox 运行时"）
+winbox/
+
+# 本机状态与临时文件
+.reasonix/
+*.log
+libresource-test.a
