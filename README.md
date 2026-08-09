@@ -66,35 +66,15 @@ feier-three 是一个基于 **Tauri + ConPTY + xterm.js** 的终端应用。它�
 | MSYS2 | 提供 mingw-w64 binutils（dlltool/windres/gcc），装于 `C:\msys64` |
 | Node.js | 任意现代版本（仅用于 tauri CLI） |
 
-### 2. 安装依赖 + 构建运行时
+### 2. 安装依赖 + 一键初始化运行时
 
 ```bash
 npm install
-# winbox/ 运行时需自行准备（见下节）
-dev.bat        # = set PATH=C:\msys64\mingw64\bin;%PATH% && npm run tauri dev
+init.bat        # 一键组装 winbox 运行时（下载 busybox/python/node + 安装伪装层）
+start.bat       # 启动开发环境（= set PATH=C:\msys64\mingw64\bin;%PATH% && npm run tauri dev）
 ```
 
-### 3. 构建 winbox 运行时（重要）
-
-本仓库为**纯源码仓库**（GitHub 体积限制），`winbox/` 运行时需自行组装（busybox/python/node 全部便携免安装）：
-
-```bash
-mkdir -p winbox/bin winbox/bin/nodejs winbox/app winbox/usr/lib
-
-# busybox（64 位 Unicode 版，必须用这个）
-curl -fsSL -o winbox/bin/busybox.exe https://frippery.org/files/busybox/busybox64u.exe
-
-# Python（Windows embeddable）
-curl -fsSL -o /tmp/python.zip https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
-# 解压到 winbox/bin/（主执行文件改名 python.exe）
-
-# Node.js + npm
-curl -fsSL -o /tmp/node.zip https://nodejs.org/dist/v22.12.0/node-v22.12.0-win-x64.zip
-# 解压到 winbox/bin/nodejs/（自带 npm）
-
-# 伪装层脚本
-# 将 winbox/usr/lib/minilinux.sh 放到对应位置（见仓库说明）
-```
+`init.bat` 自动下载并组装 `winbox/` 运行时（busybox64u + Python embeddable + Node.js，全部便携免安装），并把 [runtime/minilinux.sh](runtime/minilinux.sh) 伪装层安装到 `winbox/usr/lib/`；已存在运行时则跳过下载。
 
 > 直接从 v2 拷贝 `winbox/` 目录亦可。
 
@@ -124,8 +104,10 @@ feier-three/
 │   ├── src/main.rs         # Tauri 命令注册
 │   ├── src/winbox.rs       # ConPTY 会话表 + 环境注入
 │   └── tauri.conf.json
-├── winbox/                 # 运行时（本仓库不含，自行构建）
-├── dev.bat                 # 开发启动脚本（注入 MSYS2 binutils PATH）
+├── winbox/                 # 运行时（init.bat 自动组装，不入仓库）
+├── runtime/minilinux.sh    # mini-Linux 伪装层模板（init.bat 安装到 winbox/usr/lib/）
+├── init.bat                # 一键组装运行时（下载 busybox/python/node）
+├── start.bat               # 启动开发环境（注入 MSYS2 binutils PATH）
 └── package.json
 ```
 
