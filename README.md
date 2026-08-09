@@ -28,6 +28,12 @@ feier-three 是一个基于 **Tauri + ConPTY + xterm.js** 的终端应用。它�
 | 🔤 **中文 IME 支持** | 输入法合成提交的渲染残影已做缓解 |
 | ⚡ **零依赖、秒启动** | 无虚拟化、无 Docker、无系统级安装 |
 
+## 📸 截图
+
+![界面截图 1](screenshots/111.png)
+
+![界面截图 2](screenshots/222.png)
+
 ## 🏗️ 技术架构
 
 ```
