@@ -238,37 +238,74 @@ impl WinBox {
 
     // ---------- Agent 安装中心 ----------
 
+    // 目录下是否有以 prefix 开头的可执行文件（npm shim 是 .cmd，uv 在 Windows 生成 .exe shim，
+    // 且工具可能有多个入口如 hermes / hermes-acp / hermes-agent，故按前缀扫描）
+    fn has_bin_prefix(dir: &std::path::Path, prefix: &str) -> bool {
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            for e in rd.flatten() {
+                if let Some(name) = e.file_name().to_str() {
+                    if name.to_ascii_lowercase().starts_with(prefix) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     // 检测 agent 是否已安装（npm shim / uv 工具）
     pub fn agent_installed(&self, agent: &str) -> bool {
         let nodejs = self.root.join("bin").join("nodejs");
         let local_bin = self.root.join("app").join(".local").join("bin");
         let bin = self.root.join("bin");
-        let shims: Vec<std::path::PathBuf> = match agent {
-            "claude-code" => vec![nodejs.join("claude.cmd")],
-            "codex" => vec![nodejs.join("codex.cmd")],
-            "openclaw" => vec![nodejs.join("openclaw.cmd")],
-            "opencode" => vec![nodejs.join("opencode.cmd")],
-            "kimi-code" => vec![nodejs.join("kimi.cmd")],
-            "hermes" => vec![local_bin.join("hermes"), bin.join("hermes")],
-            _ => vec![],
+        match agent {
+            "claude-code" => Self::has_bin_prefix(&nodejs, "claude"),
+            "codex" => Self::has_bin_prefix(&nodejs, "codex"),
+            "openclaw" => Self::has_bin_prefix(&nodejs, "openclaw"),
+            "opencode" => Self::has_bin_prefix(&nodejs, "opencode"),
+            "kimi-code" => Self::has_bin_prefix(&nodejs, "kimi"),
+            "hermes" => Self::has_bin_prefix(&local_bin, "hermes") || Self::has_bin_prefix(&bin, "hermes"),
+            _ => false,
+        }
+    }
+
+    // agent 对应的（程序, 参数）：install=true 安装 / false 卸载
+    fn agent_cmd(&self, agent: &str, install: bool) -> Result<(std::path::PathBuf, Vec<&'static str>), String> {
+        let nodejs = self.root.join("bin").join("nodejs");
+        let npm = nodejs.join("npm.cmd");
+        let uv = self.root.join("bin").join("uv.exe");
+        let (prog, args): (std::path::PathBuf, Vec<&'static str>) = match (agent, install) {
+            ("claude-code", true) => (npm.clone(), vec!["install", "-g", "@anthropic-ai/claude-code@latest"]),
+            ("claude-code", false) => (npm.clone(), vec!["uninstall", "-g", "@anthropic-ai/claude-code"]),
+            ("codex", true) => (npm.clone(), vec!["install", "-g", "@openai/codex@latest"]),
+            ("codex", false) => (npm.clone(), vec!["uninstall", "-g", "@openai/codex"]),
+            ("openclaw", true) => (npm.clone(), vec!["install", "-g", "openclaw@latest"]),
+            ("openclaw", false) => (npm.clone(), vec!["uninstall", "-g", "openclaw"]),
+            ("opencode", true) => (npm.clone(), vec!["install", "-g", "opencode-ai@latest"]),
+            ("opencode", false) => (npm.clone(), vec!["uninstall", "-g", "opencode-ai"]),
+            ("kimi-code", true) => (npm.clone(), vec!["install", "-g", "@moonshot-ai/kimi-code@latest"]),
+            ("kimi-code", false) => (npm.clone(), vec!["uninstall", "-g", "@moonshot-ai/kimi-code"]),
+            ("hermes", true) => (uv.clone(), vec!["tool", "install", "hermes-agent"]),
+            ("hermes", false) => (uv.clone(), vec!["tool", "uninstall", "hermes-agent"]),
+            _ => return Err(format!("unknown agent: {}", agent)),
         };
-        shims.iter().any(|p| p.exists())
+        Ok((prog, args))
     }
 
     // 安装 agent（npm/uv 生态，走 winbox 环境；输出经事件流式推送）
     pub fn agent_install(&self, app: tauri::AppHandle, agent: &str) -> Result<(), String> {
-        let nodejs = self.root.join("bin").join("nodejs");
-        let npm = nodejs.join("npm.cmd");
-        let uv = self.root.join("bin").join("uv.exe");
-        let (prog, args): (std::path::PathBuf, Vec<&str>) = match agent {
-            "claude-code" => (npm.clone(), vec!["install", "-g", "@anthropic-ai/claude-code"]),
-            "codex" => (npm.clone(), vec!["install", "-g", "@openai/codex"]),
-            "openclaw" => (npm.clone(), vec!["install", "-g", "openclaw"]),
-            "opencode" => (npm.clone(), vec!["install", "-g", "opencode-ai"]),
-            "kimi-code" => (npm.clone(), vec!["install", "-g", "@moonshot-ai/kimi-code"]),
-            "hermes" => (uv, vec!["tool", "install", "hermes-agent"]),
-            _ => return Err(format!("unknown agent: {}", agent)),
-        };
+        let (prog, args) = self.agent_cmd(agent, true)?;
+        self.spawn_agent(app, agent, prog, args)
+    }
+
+    // 卸载 agent
+    pub fn agent_uninstall(&self, app: tauri::AppHandle, agent: &str) -> Result<(), String> {
+        let (prog, args) = self.agent_cmd(agent, false)?;
+        self.spawn_agent(app, agent, prog, args)
+    }
+
+    // 实际执行：spawn 子进程 + stdout/stderr 双线程流式推送 + 后台等待退出
+    fn spawn_agent(&self, app: tauri::AppHandle, agent: &str, prog: std::path::PathBuf, args: Vec<&'static str>) -> Result<(), String> {
         if !prog.exists() {
             return Err(format!("program not found: {}", prog.display()));
         }

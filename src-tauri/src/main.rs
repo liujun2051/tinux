@@ -75,8 +75,27 @@ fn agent_installed(agent: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn agent_install(app: tauri::AppHandle, agent: String) -> Result<(), String> {
+async fn agent_install(app: tauri::AppHandle, agent: String) -> Result<(), String> {
     WINBOX.agent_install(app, &agent)
+}
+
+#[tauri::command]
+async fn agent_uninstall(app: tauri::AppHandle, agent: String) -> Result<(), String> {
+    WINBOX.agent_uninstall(app, &agent)
+}
+
+// 返回 Windows 显示语言（前端文案本地化）：zh-CN / en-US
+// GetUserDefaultUILanguage = 用户在「设置 → 语言 → Windows 显示语言」中选择的语言
+#[tauri::command]
+fn get_os_language() -> String {
+    use winapi::um::winnt::{LANG_CHINESE, LANG_CHINESE_TRADITIONAL, LANG_ENGLISH};
+    use winapi::um::winnls::GetUserDefaultUILanguage;
+    let langid = unsafe { GetUserDefaultUILanguage() };
+    match langid & 0x3FF {
+        LANG_CHINESE | LANG_CHINESE_TRADITIONAL => "zh-CN".to_string(),
+        LANG_ENGLISH => "en-US".to_string(),
+        _ => "en-US".to_string(),
+    }
 }
 
 // 最小化窗口
@@ -112,6 +131,8 @@ fn main() {
             shell_list,
             agent_installed,
             agent_install,
+            agent_uninstall,
+            get_os_language,
             minimize_window,
             maximize_window,
             close_window

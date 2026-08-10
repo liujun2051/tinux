@@ -72,7 +72,7 @@ function createPanel(id) {
         .then(() => { panel.starting = false; })
         .catch((err) => {
           panel.starting = false;
-          term.write(`\r\n\x1b[31m重启 shell 失败: ${err}\x1b[0m\r\n`);
+          term.write(`\r\n\x1b[31m${t('shell.restartFail', err)}\x1b[0m\r\n`);
         });
       return;
     }
@@ -93,7 +93,7 @@ function createPanel(id) {
     .then(() => { panel.starting = false; })
     .catch((err) => {
       panel.starting = false;
-      term.write(`\r\n\x1b[31m启动 shell 失败: ${err}\x1b[0m\r\n`);
+      term.write(`\r\n\x1b[31m${t('shell.startFail', err)}\x1b[0m\r\n`);
     });
 
   return panel;
@@ -158,7 +158,7 @@ function renderTabs() {
   const add = document.createElement('button');
   add.className = 'tab add';
   add.textContent = '+';
-  add.title = '新建 tab (Ctrl+Shift+T)';
+  add.title = t('tab.new');
   add.addEventListener('click', () => createTab());
   tabbar.appendChild(add);
 }
@@ -344,29 +344,29 @@ settingsOverlay.id = 'settings-overlay';
 settingsOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;display:none;align-items:center;justify-content:center;';
 settingsOverlay.innerHTML = `
   <div class="settings-card">
-    <h3>⚙ 设置</h3>
-    <label class="setting-row">窗口透明度
+    <h3 data-i18n="settings.title">⚙ 设置</h3>
+    <label class="setting-row"><span data-i18n="settings.opacity">窗口透明度</span>
       <input type="range" id="set-opacity" min="10" max="100">
       <span id="set-opacity-v" class="setting-v"></span>
     </label>
-    <label class="setting-row">字体
+    <label class="setting-row"><span data-i18n="settings.font">字体</span>
       <select id="set-font">
         <option value='Consolas, Monaco, "Courier New", monospace'>Consolas</option>
-        <option value='"Microsoft YaHei", Consolas, monospace'>微软雅黑</option>
+        <option value='"Microsoft YaHei", Consolas, monospace' data-i18n="settings.font.yh">微软雅黑</option>
         <option value='"Courier New", monospace'>Courier New</option>
-        <option value='monospace'>默认等宽</option>
+        <option value='monospace' data-i18n="settings.font.mono">默认等宽</option>
       </select>
     </label>
-    <label class="setting-row">字号
+    <label class="setting-row"><span data-i18n="settings.fontsize">字号</span>
       <input type="range" id="set-fontsize" min="10" max="24">
       <span id="set-fontsize-v" class="setting-v"></span>
     </label>
-    <label class="setting-row">前景色 <input type="color" id="set-fg"></label>
-    <label class="setting-row">背景色 <input type="color" id="set-bg"></label>
-    <label class="setting-row">光标色 <input type="color" id="set-cursor"></label>
+    <label class="setting-row"><span data-i18n="settings.fg">前景色</span> <input type="color" id="set-fg"></label>
+    <label class="setting-row"><span data-i18n="settings.bg">背景色</span> <input type="color" id="set-bg"></label>
+    <label class="setting-row"><span data-i18n="settings.cursor">光标色</span> <input type="color" id="set-cursor"></label>
     <div class="settings-actions">
-      <button id="set-reset">恢复默认</button>
-      <button id="set-close">关闭</button>
+      <button id="set-reset" data-i18n="settings.reset">恢复默认</button>
+      <button id="set-close" data-i18n="settings.close">关闭</button>
     </div>
   </div>
 `;
@@ -420,33 +420,54 @@ agentsOverlay.id = 'agents-overlay';
 agentsOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:998;display:none;align-items:center;justify-content:center;';
 const agentCard = document.createElement('div');
 agentCard.className = 'agent-card';
-agentCard.innerHTML = '<h3>▦ Agent 安装中心</h3><div id="agent-list"></div>';
+agentCard.innerHTML = '<div class="agent-card-head"><h3 data-i18n="agent.title">▦ Agent 安装中心</h3><button id="agents-close" class="agent-close" data-i18n-title="agent.close" title="关闭 (Esc)">✕</button></div><div id="agent-list"></div>';
 agentsOverlay.appendChild(agentCard);
 document.body.appendChild(agentsOverlay);
 
 function applyAgentState(st) {
   if (!st.els) return;
-  const { fill, btn, status } = st.els;
+  const { fill, btn, ubtn, status } = st.els;
   fill.className = 'fill';
   if (st.status === 'installing') {
     fill.classList.add('working');
     btn.disabled = true;
-    btn.textContent = '安装中…';
-    status.textContent = st.msg || '安装中…';
+    btn.textContent = t('agent.installing');
+    if (ubtn) ubtn.disabled = true;
+    status.textContent = st.msg || t('agent.installing');
+  } else if (st.status === 'uninstalling') {
+    fill.classList.add('working');
+    btn.disabled = true;
+    if (ubtn) {
+      ubtn.disabled = true;
+      ubtn.textContent = t('agent.uninstalling');
+    }
+    status.textContent = st.msg || t('agent.uninstalling');
   } else if (st.status === 'done') {
     fill.style.width = '100%';
     btn.disabled = true;
-    btn.textContent = '已安装 ✓';
-    status.textContent = '已安装';
+    btn.textContent = t('agent.installed');
+    if (ubtn) {
+      ubtn.disabled = false;
+      ubtn.textContent = t('agent.uninstall');
+    }
+    status.textContent = t('agent.installedStatus');
   } else if (st.status === 'failed') {
     fill.style.width = '0%';
     btn.disabled = false;
-    btn.textContent = '重试';
-    status.textContent = st.msg || '失败';
+    btn.textContent = t('agent.retry');
+    if (ubtn) {
+      ubtn.disabled = true;
+      ubtn.textContent = t('agent.uninstall');
+    }
+    status.textContent = st.msg || t('agent.retry');
   } else {
     fill.style.width = '0%';
     btn.disabled = false;
-    btn.textContent = '安装';
+    btn.textContent = t('agent.install');
+    if (ubtn) {
+      ubtn.disabled = true;
+      ubtn.textContent = t('agent.uninstall');
+    }
     status.textContent = st.msg || '';
   }
 }
@@ -464,17 +485,32 @@ function renderAgentRow(a) {
     </div>
     <div class="agent-status"></div>
     <div class="agent-bar"><div class="fill"></div></div>
-    <button class="agent-btn">安装</button>`;
+    <button class="agent-btn">${t('agent.install')}</button>
+    <button class="agent-btn agent-btn-uninstall">${t('agent.uninstall')}</button>`;
   st.els = {
     fill: row.querySelector('.fill'),
     btn: row.querySelector('.agent-btn'),
+    ubtn: row.querySelector('.agent-btn-uninstall'),
     status: row.querySelector('.agent-status')
   };
   st.els.btn.addEventListener('click', () => {
+    st.busy = 'install';
     st.status = 'installing';
-    st.msg = '启动…';
+    st.msg = t('agent.starting');
     applyAgentState(st);
     invoke('agent_install', { agent: a.id })
+      .catch((err) => {
+        st.status = 'failed';
+        st.msg = String(err);
+        applyAgentState(st);
+      });
+  });
+  st.els.ubtn.addEventListener('click', () => {
+    st.busy = 'uninstall';
+    st.status = 'uninstalling';
+    st.msg = t('agent.starting');
+    applyAgentState(st);
+    invoke('agent_uninstall', { agent: a.id })
       .catch((err) => {
         st.status = 'failed';
         st.msg = String(err);
@@ -604,12 +640,17 @@ function onShellOutput(sid, text) {
 
 // ---------- 初始化 ----------
 document.addEventListener('DOMContentLoaded', async () => {
+  // 国际化：先按 Windows 显示语言切文案，再构建 UI
+  await detectLanguage();
+  applyI18n();
+
   // 标题栏
   document.getElementById('titlebar-minimize').addEventListener('click', () => appWindow.minimize());
   document.getElementById('titlebar-maximize').addEventListener('click', () => appWindow.toggleMaximize());
   document.getElementById('titlebar-close').addEventListener('click', () => appWindow.close());
   document.getElementById('titlebar-settings').addEventListener('click', openSettings);
   document.getElementById('titlebar-agents').addEventListener('click', openAgents);
+  document.getElementById('agents-close').addEventListener('click', closeAgents);
 
   // 版本号（构建时间戳，精确到秒）
   const BUILD_TS = '2026-08-10 09:30:13';
@@ -648,7 +689,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const line = String(event.payload.text).trim().split('\n').pop() || '';
     if (line) {
       st.msg = line.slice(0, 60);
-      if (st.status === 'installing' && st.els) st.els.status.textContent = st.msg;
+      if ((st.status === 'installing' || st.status === 'uninstalling') && st.els) st.els.status.textContent = st.msg;
     }
   });
 
@@ -656,8 +697,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   await listen('agent-install-done', (event) => {
     const st = agentState[event.payload.agent];
     if (!st) return;
-    st.status = event.payload.code === 0 ? 'done' : 'failed';
-    if (st.status === 'failed') st.msg = '安装失败 (exit ' + event.payload.code + ')';
+    const ok = event.payload.code === 0;
+    if (st.busy === 'uninstall') {
+      st.status = ok ? 'idle' : 'failed';
+      st.msg = ok ? '' : t('agent.uninstallFail', event.payload.code);
+      if (ok) {
+        // 卸载成功后复查实际状态（npm/uv 可能残留）
+        invoke('agent_installed', { agent: event.payload.agent }).then((inst) => {
+          if (inst) st.status = 'done';
+          applyAgentState(st);
+        });
+        return;
+      }
+    } else {
+      st.status = ok ? 'done' : 'failed';
+      st.msg = ok ? '' : t('agent.installFail', event.payload.code);
+    }
     applyAgentState(st);
   });
 
@@ -733,7 +788,8 @@ videoEl.style.cssText = 'max-width:92vw;max-height:78vh;background:#000;border-r
 const videoBar = document.createElement('div');
 videoBar.style.cssText = 'display:flex;align-items:center;gap:12px;color:#888;font-size:12px;';
 const videoClose = document.createElement('button');
-videoClose.textContent = '关闭';
+videoClose.textContent = t('video.close');
+videoClose.dataset.i18n = 'video.close'; // 语言检测后由 applyI18n 覆盖（脚本求值期 t() 还是默认语言）
 videoClose.onclick = () => { videoOverlay.style.display = 'none'; videoEl.pause(); };
 const videoHint = document.createElement('span');
 videoBar.appendChild(videoClose);

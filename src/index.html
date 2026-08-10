@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>feier-two 🥰</title>
+  <title>winux 🥰</title>
   <link rel="stylesheet" href="styles/terminal.css">
   <link rel="stylesheet" href="vendor/xterm.css">
 </head>
@@ -12,12 +12,12 @@
   <div class="titlebar" data-tauri-drag-region>
     <div class="titlebar-title">winux 🥰 <span id="titlebar-version"></span></div>
     <div class="titlebar-opacity">
-      <input type="range" id="opacity-slider" min="10" max="100" value="85" title="窗口透明度">
+      <input type="range" id="opacity-slider" min="10" max="100" value="85" data-i18n-title="titlebar.opacity" title="窗口透明度">
       <span id="opacity-value">85%</span>
     </div>
     <div class="titlebar-controls">
-      <button class="btn-settings" id="titlebar-agents" title="Agent 安装中心">▦</button>
-      <button class="btn-settings" id="titlebar-settings" title="设置">⚙</button>
+      <button class="btn-settings" id="titlebar-agents" data-i18n-title="titlebar.agents" title="Agent 安装中心">▦</button>
+      <button class="btn-settings" id="titlebar-settings" data-i18n-title="titlebar.settings" title="设置">⚙</button>
       <button class="btn-minimize" id="titlebar-minimize">−</button>
       <button class="btn-maximize" id="titlebar-maximize">□</button>
       <button class="btn-close" id="titlebar-close">×</button>
@@ -35,6 +35,7 @@
 
   <script src="vendor/xterm.js"></script>
   <script src="vendor/xterm-addon-fit.js"></script>
+  <script src="scripts/i18n.js"></script>
   <script src="scripts/terminal.js"></script>
 </body>
 </html>
