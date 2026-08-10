@@ -9,4 +9,5 @@ winbox/
 # 本机状态与临时文件
 .reasonix/
 *.log
+*.zip
 libresource-test.a
