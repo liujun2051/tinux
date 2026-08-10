@@ -34,6 +34,13 @@ body {
   pointer-events: none;
 }
 
+#titlebar-version {
+  font-size: 11px;
+  color: #666;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
 .titlebar-controls {
   display: flex;
   gap: 8px;

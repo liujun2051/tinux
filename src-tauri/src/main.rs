@@ -12,6 +12,11 @@ lazy_static::lazy_static! {
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 for anc in dir.ancestors() {
+                    // 跳过 target/ 目录下的资源拷贝（bundle.resources 会拷一份 winbox-dist 到 target 里）。
+                    // 开发期应优先使用项目根的真实 winbox/；发行安装包则直接命中 exe 旁的 winbox/。
+                    if anc.components().any(|c| c.as_os_str() == "target") {
+                        continue;
+                    }
                     candidates.push(anc.join("winbox"));
                 }
             }

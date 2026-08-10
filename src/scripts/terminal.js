@@ -59,7 +59,7 @@ function createPanel(id) {
     });
   }
 
-  const panel = { id, term, fit, container, outBuf: '', exited: false, starting: false };
+  const panel = { id, term, fit, container, outBuf: '', exited: false, starting: false, syncOn: false, syncBuf: '', syncTail: '' };
   panels.set(id, panel);
 
   // 输入 → 对应会话（退出后按任意键重启，防重入）
@@ -403,9 +403,9 @@ document.getElementById('set-reset').addEventListener('click', () => { SETTINGS 
 document.getElementById('set-close').addEventListener('click', closeSettings);
 
 // ---------- 输出路由（按 session_id 分发，含内置命令标记剥离） ----------
-function onShellOutput(sid, text) {
-  const p = panels.get(sid);
-  if (!p) return;
+// 写入终端（含 __FEIER__video: 标记剥离 + 行缓冲）
+function writeChunk(p, text) {
+  if (!text) return;
   p.outBuf += text;
   let idx;
   while ((idx = p.outBuf.indexOf('\n')) !== -1) {
@@ -425,6 +425,76 @@ function onShellOutput(sid, text) {
   }
 }
 
+// 同步输出 (DECSET 2026) shim：xterm 5.3 不支持，自行缓冲到 2026l 再一次性提交
+// 序列长度：\x1b[?2026h / \x1b[?2026l 均为 8 字节；可能跨 16KB 分块截断，仅在结尾疑似前缀时暂存尾巴
+// （mimo 依赖 2026；xterm 6 原生支持但渲染器有叠影问题，5.3+shim 为最佳已验证组合）
+const SYNC_SEQ = ['\x1b[?2026h', '\x1b[?2026l', '\x1b[?2026', '\x1b[?202', '\x1b[?20', '\x1b[?2', '\x1b[?', '\x1b['];
+const SYNC_LEN = 8;
+
+function trailingSyncTail(s) {
+  for (const pr of SYNC_SEQ) {
+    if (s.endsWith(pr)) return pr.length;
+  }
+  return 0;
+}
+
+function onShellOutput(sid, text) {
+  const p = panels.get(sid);
+  if (!p) return;
+  const combined = p.syncTail + text;
+  p.syncTail = '';
+
+  // 常规输出（无 2026）：直接渲染，仅暂存可能跨块的序列尾巴
+  if (!combined.includes('\x1b[?2026')) {
+    const tail = trailingSyncTail(combined);
+    if (tail) {
+      p.syncTail = combined.slice(-tail);
+      writeChunk(p, combined.slice(0, -tail));
+    } else {
+      writeChunk(p, combined);
+    }
+    return;
+  }
+
+  let rest = combined;
+  let guard = 0;
+  while (rest.length && guard++ < 2000) {
+    if (p.syncOn) {
+      const end = rest.indexOf('\x1b[?2026l');
+      if (end === -1) {
+        const tail = trailingSyncTail(rest);
+        if (tail) {
+          p.syncBuf += rest.slice(0, -tail);
+          p.syncTail = rest.slice(-tail);
+        } else {
+          p.syncBuf += rest;
+        }
+        break;
+      }
+      p.syncBuf += rest.slice(0, end);
+      p.syncOn = false;
+      writeChunk(p, p.syncBuf); // 整帧原子提交
+      p.syncBuf = '';
+      rest = rest.slice(end + SYNC_LEN);
+    } else {
+      const start = rest.indexOf('\x1b[?2026h');
+      if (start === -1) {
+        const tail = trailingSyncTail(rest);
+        if (tail) {
+          writeChunk(p, rest.slice(0, -tail));
+          p.syncTail = rest.slice(-tail);
+        } else {
+          writeChunk(p, rest);
+        }
+        break;
+      }
+      writeChunk(p, rest.slice(0, start));
+      p.syncOn = true;
+      rest = rest.slice(start + SYNC_LEN);
+    }
+  }
+}
+
 // ---------- 初始化 ----------
 document.addEventListener('DOMContentLoaded', async () => {
   // 标题栏
@@ -432,6 +502,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('titlebar-maximize').addEventListener('click', () => appWindow.toggleMaximize());
   document.getElementById('titlebar-close').addEventListener('click', () => appWindow.close());
   document.getElementById('titlebar-settings').addEventListener('click', openSettings);
+
+  // 版本号（构建时间戳，精确到秒）
+  const BUILD_TS = '2026-08-10 09:30:13';
+  try {
+    const ver = await window.__TAURI__.app.getVersion();
+    document.getElementById('titlebar-version').textContent = `v${ver} · ${BUILD_TS}`;
+  } catch (_) {
+    document.getElementById('titlebar-version').textContent = BUILD_TS;
+  }
 
   // 透明度滑块（同步 SETTINGS）
   opacitySlider.addEventListener('input', (e) => {
@@ -458,6 +537,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('resize', () => {
     for (const p of panels.values()) p.fit.fit();
   });
+
+  // 布局稳定后校准一次尺寸（首次 fit 时容器可能未定型，避免 TUI 底部裁行）
+  setTimeout(() => {
+    for (const p of panels.values()) {
+      try {
+        p.fit.fit();
+        invoke('shell_resize', { sessionId: p.id, rows: p.term.rows, cols: p.term.cols });
+      } catch (_) { /* 尺寸未就绪 */ }
+    }
+  }, 300);
 
   // 默认启动一个 tab（内含一个 panel）
   createTab();
