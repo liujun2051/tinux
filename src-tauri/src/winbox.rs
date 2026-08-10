@@ -28,6 +28,20 @@ struct ShellExit {
     session_id: String,
 }
 
+// Agent 安装输出事件负载
+#[derive(serde::Serialize, Clone)]
+struct AgentInstallOutput {
+    agent: String,
+    text: String,
+}
+
+// Agent 安装完成事件负载
+#[derive(serde::Serialize, Clone)]
+struct AgentInstallDone {
+    agent: String,
+    code: i32,
+}
+
 // 输出解码：优先 UTF-8（busybox/node 等原生输出）；
 // 非法 UTF-8 时按 GBK 解码（中文 Windows 下 ping/ipconfig 等系统命令输出为 GBK）
 fn decode_output(bytes: &[u8]) -> String {
@@ -42,14 +56,43 @@ fn decode_output(bytes: &[u8]) -> String {
 
 pub struct WinBox {
     root: PathBuf,
+    // true = 当前系统无法运行 u 版（UTF-8 manifest 仅 Win10 1903+ 支持），
+    // 需用 ANSI 版 busybox-ansi.exe（无 UTF-8 manifest，也无 GetACP 检查）
+    ansi: bool,
     sessions: Mutex<HashMap<String, ShellSession>>,
 }
 
 impl WinBox {
     pub fn new(root: PathBuf) -> Self {
+        let ansi = Self::probe_ansi(&root);
         WinBox {
             root,
+            ansi,
             sessions: Mutex::new(HashMap::new()),
+        }
+    }
+
+    // 探测 u 版 busybox 能否在本系统运行：<Win10 1903（如 Server 2016/2019）上
+    // u 版启动即打印 "UTF8 manifest not supported" 并退出（libbb/appletlib.c
+    // 的 FAIL_IF_UTF8_MANIFEST_UNSUPPORTED 检查）。探测一次，进程生命周期内缓存。
+    fn probe_ansi(root: &PathBuf) -> bool {
+        let ansi = root.join("bin").join("busybox-ansi.exe");
+        if !ansi.exists() {
+            return false; // 旧运行时没有 ANSI 版，只能用 u 版
+        }
+        let u = root.join("bin").join("busybox.exe");
+        match std::process::Command::new(&u).args(["sh", "-c", "exit 0"]).output() {
+            Ok(o) => String::from_utf8_lossy(&o.stderr).contains("UTF8 manifest"),
+            Err(_) => false,
+        }
+    }
+
+    // 当前系统适用的 busybox 路径
+    fn busybox(&self) -> PathBuf {
+        if self.ansi {
+            self.root.join("bin").join("busybox-ansi.exe")
+        } else {
+            self.root.join("bin").join("busybox.exe")
         }
     }
 
@@ -75,7 +118,7 @@ impl WinBox {
             })
             .map_err(|e| e.to_string())?;
 
-        let busybox = self.root.join("bin").join("busybox.exe");
+        let busybox = self.busybox();
         let mut cmd = CommandBuilder::new(busybox.to_string_lossy().into_owned());
         cmd.arg("sh");
 
@@ -188,9 +231,131 @@ impl WinBox {
         ids
     }
 
+    // ---------- Agent 安装中心 ----------
+
+    // 检测 agent 是否已安装（npm shim / uv 工具）
+    pub fn agent_installed(&self, agent: &str) -> bool {
+        let nodejs = self.root.join("bin").join("nodejs");
+        let local_bin = self.root.join("app").join(".local").join("bin");
+        let bin = self.root.join("bin");
+        let shims: Vec<std::path::PathBuf> = match agent {
+            "claude-code" => vec![nodejs.join("claude.cmd")],
+            "codex" => vec![nodejs.join("codex.cmd")],
+            "openclaw" => vec![nodejs.join("openclaw.cmd")],
+            "opencode" => vec![nodejs.join("opencode.cmd")],
+            "kimi-code" => vec![nodejs.join("kimi.cmd")],
+            "hermes" => vec![local_bin.join("hermes"), bin.join("hermes")],
+            _ => vec![],
+        };
+        shims.iter().any(|p| p.exists())
+    }
+
+    // 安装 agent（npm/uv 生态，走 winbox 环境；输出经事件流式推送）
+    pub fn agent_install(&self, app: tauri::AppHandle, agent: &str) -> Result<(), String> {
+        let nodejs = self.root.join("bin").join("nodejs");
+        let npm = nodejs.join("npm.cmd");
+        let uv = self.root.join("bin").join("uv.exe");
+        let (prog, args): (std::path::PathBuf, Vec<&str>) = match agent {
+            "claude-code" => (npm.clone(), vec!["install", "-g", "@anthropic-ai/claude-code"]),
+            "codex" => (npm.clone(), vec!["install", "-g", "@openai/codex"]),
+            "openclaw" => (npm.clone(), vec!["install", "-g", "openclaw"]),
+            "opencode" => (npm.clone(), vec!["install", "-g", "opencode-ai"]),
+            "kimi-code" => (npm.clone(), vec!["install", "-g", "@moonshot-ai/kimi-code"]),
+            "hermes" => (uv, vec!["tool", "install", "hermes-agent"]),
+            _ => return Err(format!("unknown agent: {}", agent)),
+        };
+        if !prog.exists() {
+            return Err(format!("program not found: {}", prog.display()));
+        }
+
+        let bin_dir = self.root.join("bin").to_string_lossy().replace('\\', "/");
+        let node_dir = self.root.join("bin").join("nodejs").to_string_lossy().replace('\\', "/");
+        let app_dir = self.root.join("app").to_string_lossy().replace('\\', "/");
+        let local_bin = self.root.join("app").join(".local").join("bin").to_string_lossy().replace('\\', "/");
+        let tmp_dir = self.root.join("app").join("tmp");
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let path = format!(
+            "{};{};{};{}",
+            bin_dir,
+            node_dir,
+            local_bin,
+            std::env::var("PATH").unwrap_or_default()
+        );
+
+        let mut child = std::process::Command::new(&prog)
+            .args(&args)
+            .env("PATH", &path)
+            .env("HOME", &app_dir)
+            .env("USERPROFILE", &app_dir)
+            .env("TMPDIR", tmp_dir.to_string_lossy().replace('\\', "/"))
+            .env("UV_TOOL_BIN_DIR", &bin_dir)
+            .current_dir(self.root.join("app"))
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        let stdout = child.stdout.take().ok_or("no stdout")?;
+        let stderr = child.stderr.take().ok_or("no stderr")?;
+        let a1 = agent.to_string();
+        let a2 = agent.to_string();
+        let a3 = agent.to_string();
+        let app2 = app.clone();
+        let app3 = app.clone();
+
+        // stdout / stderr 各一个读取线程，逐块推送
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut r = stdout;
+            let mut buf = [0u8; 4096];
+            loop {
+                match r.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let _ = app2.emit_all(
+                            "agent-install-output",
+                            AgentInstallOutput {
+                                agent: a1.clone(),
+                                text: decode_output(&buf[..n]),
+                            },
+                        );
+                    }
+                }
+            }
+        });
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut r = stderr;
+            let mut buf = [0u8; 4096];
+            loop {
+                match r.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let _ = app3.emit_all(
+                            "agent-install-output",
+                            AgentInstallOutput {
+                                agent: a2.clone(),
+                                text: decode_output(&buf[..n]),
+                            },
+                        );
+                    }
+                }
+            }
+        });
+
+        // 等待退出 → 完成事件
+        let app4 = app;
+        std::thread::spawn(move || {
+            let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
+            let _ = app4.emit_all("agent-install-done", AgentInstallDone { agent: a3, code });
+        });
+
+        Ok(())
+    }
+
     // 执行 WinBox 命令
     pub fn run(&self, command: &str) -> Result<String, String> {
-        let busybox = self.root.join("bin").join("busybox.exe");
+        let busybox = self.busybox();
         // mini-linux 伪装层：每条命令执行前先 source 补丁脚本（如 uname → Linux）
         let shim = self.root.join("usr").join("lib").join("minilinux.sh");
         let shim_path = shim.to_string_lossy().replace('\\', "/");

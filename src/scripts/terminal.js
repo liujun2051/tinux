@@ -402,6 +402,113 @@ document.getElementById('set-cursor').addEventListener('input', (e) => { SETTING
 document.getElementById('set-reset').addEventListener('click', () => { SETTINGS = Object.assign({}, DEFAULT_SETTINGS); applySettings(); saveSettings(); syncSettingsPanel(); });
 document.getElementById('set-close').addEventListener('click', closeSettings);
 
+// ---------- Agent 安装中心 ----------
+const AGENTS = [
+  { id: 'claude-code', name: 'Claude Code', pkg: '@anthropic-ai/claude-code', icon: '🟠' },
+  { id: 'codex', name: 'Codex', pkg: '@openai/codex', icon: '🟢' },
+  { id: 'openclaw', name: 'OpenClaw', pkg: 'openclaw', icon: '🐾' },
+  { id: 'hermes', name: 'Hermes', pkg: 'hermes-agent', icon: '🧞' },
+  { id: 'opencode', name: 'OpenCode', pkg: 'opencode-ai', icon: '⚡' },
+  { id: 'kimi-code', name: 'Kimi Code', pkg: '@moonshot-ai/kimi-code', icon: '✨' }
+];
+
+// agent 状态表: id -> { status: idle|installing|done|failed, msg, els }
+const agentState = {};
+
+const agentsOverlay = document.createElement('div');
+agentsOverlay.id = 'agents-overlay';
+agentsOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:998;display:none;align-items:center;justify-content:center;';
+const agentCard = document.createElement('div');
+agentCard.className = 'agent-card';
+agentCard.innerHTML = '<h3>▦ Agent 安装中心</h3><div id="agent-list"></div>';
+agentsOverlay.appendChild(agentCard);
+document.body.appendChild(agentsOverlay);
+
+function applyAgentState(st) {
+  if (!st.els) return;
+  const { fill, btn, status } = st.els;
+  fill.className = 'fill';
+  if (st.status === 'installing') {
+    fill.classList.add('working');
+    btn.disabled = true;
+    btn.textContent = '安装中…';
+    status.textContent = st.msg || '安装中…';
+  } else if (st.status === 'done') {
+    fill.style.width = '100%';
+    btn.disabled = true;
+    btn.textContent = '已安装 ✓';
+    status.textContent = '已安装';
+  } else if (st.status === 'failed') {
+    fill.style.width = '0%';
+    btn.disabled = false;
+    btn.textContent = '重试';
+    status.textContent = st.msg || '失败';
+  } else {
+    fill.style.width = '0%';
+    btn.disabled = false;
+    btn.textContent = '安装';
+    status.textContent = st.msg || '';
+  }
+}
+
+function renderAgentRow(a) {
+  const st = (agentState[a.id] = agentState[a.id] || { status: 'idle', msg: '', els: null });
+  const row = document.createElement('div');
+  row.className = 'agent-row';
+  row.dataset.agent = a.id;
+  row.innerHTML = `
+    <span class="agent-icon">${a.icon}</span>
+    <div class="agent-info">
+      <div class="agent-name">${a.name}</div>
+      <div class="agent-pkg">${a.pkg}</div>
+    </div>
+    <div class="agent-status"></div>
+    <div class="agent-bar"><div class="fill"></div></div>
+    <button class="agent-btn">安装</button>`;
+  st.els = {
+    fill: row.querySelector('.fill'),
+    btn: row.querySelector('.agent-btn'),
+    status: row.querySelector('.agent-status')
+  };
+  st.els.btn.addEventListener('click', () => {
+    st.status = 'installing';
+    st.msg = '启动…';
+    applyAgentState(st);
+    invoke('agent_install', { agent: a.id })
+      .catch((err) => {
+        st.status = 'failed';
+        st.msg = String(err);
+        applyAgentState(st);
+      });
+  });
+  // 初始已安装检测（仅在空闲时生效，避免覆盖用户点击）
+  invoke('agent_installed', { agent: a.id })
+    .then((ok) => {
+      if (ok && st.status === 'idle') {
+        st.status = 'done';
+        applyAgentState(st);
+      }
+    })
+    .catch(() => {});
+  applyAgentState(st);
+  return row;
+}
+
+function renderAgentList() {
+  const list = document.getElementById('agent-list');
+  list.innerHTML = '';
+  for (const a of AGENTS) list.appendChild(renderAgentRow(a));
+}
+
+function openAgents() {
+  renderAgentList();
+  agentsOverlay.style.display = 'flex';
+}
+
+function closeAgents() {
+  agentsOverlay.style.display = 'none';
+}
+
 // ---------- 输出路由（按 session_id 分发，含内置命令标记剥离） ----------
 // 写入终端（含 __FEIER__video: 标记剥离 + 行缓冲）
 function writeChunk(p, text) {
@@ -502,6 +609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('titlebar-maximize').addEventListener('click', () => appWindow.toggleMaximize());
   document.getElementById('titlebar-close').addEventListener('click', () => appWindow.close());
   document.getElementById('titlebar-settings').addEventListener('click', openSettings);
+  document.getElementById('titlebar-agents').addEventListener('click', openAgents);
 
   // 版本号（构建时间戳，精确到秒）
   const BUILD_TS = '2026-08-10 09:30:13';
@@ -531,6 +639,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const p = panels.get(event.payload.session_id);
     if (!p) return;
     p.exited = true;
+  });
+
+  // Agent 安装输出（更新状态行）
+  await listen('agent-install-output', (event) => {
+    const st = agentState[event.payload.agent];
+    if (!st) return;
+    const line = String(event.payload.text).trim().split('\n').pop() || '';
+    if (line) {
+      st.msg = line.slice(0, 60);
+      if (st.status === 'installing' && st.els) st.els.status.textContent = st.msg;
+    }
+  });
+
+  // Agent 安装完成
+  await listen('agent-install-done', (event) => {
+    const st = agentState[event.payload.agent];
+    if (!st) return;
+    st.status = event.payload.code === 0 ? 'done' : 'failed';
+    if (st.status === 'failed') st.msg = '安装失败 (exit ' + event.payload.code + ')';
+    applyAgentState(st);
   });
 
   // 窗口缩放 → 所有 panel 自适应
@@ -619,6 +747,7 @@ document.addEventListener('keydown', (e) => {
     videoOverlay.style.display = 'none';
     videoEl.pause();
     settingsOverlay.style.display = 'none';
+    agentsOverlay.style.display = 'none';
   }
 });
 

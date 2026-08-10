@@ -69,6 +69,16 @@ fn shell_list() -> Result<Vec<String>, String> {
     Ok(WINBOX.shell_list())
 }
 
+#[tauri::command]
+fn agent_installed(agent: String) -> Result<bool, String> {
+    Ok(WINBOX.agent_installed(&agent))
+}
+
+#[tauri::command]
+fn agent_install(app: tauri::AppHandle, agent: String) -> Result<(), String> {
+    WINBOX.agent_install(app, &agent)
+}
+
 // 最小化窗口
 #[tauri::command]
 fn minimize_window(window: tauri::Window) -> Result<(), String> {
@@ -100,6 +110,8 @@ fn main() {
             shell_resize,
             shell_stop,
             shell_list,
+            agent_installed,
+            agent_install,
             minimize_window,
             maximize_window,
             close_window

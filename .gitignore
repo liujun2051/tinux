@@ -11,3 +11,6 @@ winbox/
 *.log
 *.zip
 libresource-test.a
+
+# ConPTY 调试工具（repro-conpty：复刻 winbox.rs 的 shell 启动，含 target/ 构建产物）
+repro-conpty/

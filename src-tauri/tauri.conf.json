@@ -47,7 +47,8 @@
         "icons/icon.ico"
       ],
       "resources": {
-        "../winbox-dist": "winbox"
+        "../winbox-dist": "winbox",
+        "WebView2Loader.dll": "."
       }
     }
   }

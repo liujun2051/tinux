@@ -1,7 +1,7 @@
 [package]
-name = "feier-one"
-version = "0.1.0"
-description = "飞儿一体 - 透明 AI 终端"
+name = "winux"
+version = "0.2.0"
+description = "Windows 上的 Linux shell，无需安装 WSL。支持 openclaw、codex、claude code、hermes、kimi code 等 AI agent。"
 authors = ["爸爸", "飞儿"]
 license = "MIT"
 edition = "2021"

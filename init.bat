@@ -10,9 +10,11 @@ if exist winbox\bin\busybox.exe (
     goto :shim
 )
 
-echo [1/4] Downloading busybox (x86_64 Unicode)...
+echo [1/4] Downloading busybox (x86_64 Unicode + ANSI)...
 mkdir winbox\bin\nodejs winbox\app winbox\usr\lib 2>nul
 curl -fsSL -o winbox\bin\busybox.exe https://frippery.org/files/busybox/busybox64u.exe
+if errorlevel 1 goto :err
+curl -fsSL -o winbox\bin\busybox-ansi.exe https://frippery.org/files/busybox/busybox64.exe
 if errorlevel 1 goto :err
 
 echo [2/4] Downloading Python (embeddable)...
