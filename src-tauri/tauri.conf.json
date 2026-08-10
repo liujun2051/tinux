@@ -45,7 +45,10 @@
       "identifier": "com.feier.one",
       "icon": [
         "icons/icon.ico"
-      ]
+      ],
+      "resources": {
+        "../winbox-dist": "winbox"
+      }
     }
   }
 }
