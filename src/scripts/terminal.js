@@ -426,48 +426,38 @@ document.body.appendChild(agentsOverlay);
 
 function applyAgentState(st) {
   if (!st.els) return;
-  const { fill, btn, ubtn, status } = st.els;
+  const { fill, btn, status } = st.els;
   fill.className = 'fill';
+  // 单按钮模式：已安装/卸载中/卸载失败 → 卸载样式（红）；其余 → 安装样式（绿）
+  const uninstallMode =
+    st.status === 'done' ||
+    st.status === 'uninstalling' ||
+    (st.status === 'failed' && st.busy === 'uninstall');
+  btn.classList.toggle('agent-btn-uninstall', uninstallMode);
   if (st.status === 'installing') {
     fill.classList.add('working');
     btn.disabled = true;
     btn.textContent = t('agent.installing');
-    if (ubtn) ubtn.disabled = true;
     status.textContent = st.msg || t('agent.installing');
   } else if (st.status === 'uninstalling') {
     fill.classList.add('working');
     btn.disabled = true;
-    if (ubtn) {
-      ubtn.disabled = true;
-      ubtn.textContent = t('agent.uninstalling');
-    }
+    btn.textContent = t('agent.uninstalling');
     status.textContent = st.msg || t('agent.uninstalling');
   } else if (st.status === 'done') {
     fill.style.width = '100%';
-    btn.disabled = true;
-    btn.textContent = t('agent.installed');
-    if (ubtn) {
-      ubtn.disabled = false;
-      ubtn.textContent = t('agent.uninstall');
-    }
+    btn.disabled = false;
+    btn.textContent = t('agent.uninstall');
     status.textContent = t('agent.installedStatus');
   } else if (st.status === 'failed') {
     fill.style.width = '0%';
     btn.disabled = false;
     btn.textContent = t('agent.retry');
-    if (ubtn) {
-      ubtn.disabled = true;
-      ubtn.textContent = t('agent.uninstall');
-    }
     status.textContent = st.msg || t('agent.retry');
   } else {
     fill.style.width = '0%';
     btn.disabled = false;
     btn.textContent = t('agent.install');
-    if (ubtn) {
-      ubtn.disabled = true;
-      ubtn.textContent = t('agent.uninstall');
-    }
     status.textContent = st.msg || '';
   }
 }
@@ -485,32 +475,20 @@ function renderAgentRow(a) {
     </div>
     <div class="agent-status"></div>
     <div class="agent-bar"><div class="fill"></div></div>
-    <button class="agent-btn">${t('agent.install')}</button>
-    <button class="agent-btn agent-btn-uninstall">${t('agent.uninstall')}</button>`;
+    <button class="agent-btn">${t('agent.install')}</button>`;
   st.els = {
     fill: row.querySelector('.fill'),
     btn: row.querySelector('.agent-btn'),
-    ubtn: row.querySelector('.agent-btn-uninstall'),
     status: row.querySelector('.agent-status')
   };
+  // 单按钮：按状态切换安装/卸载（已安装 → 卸载，否则 → 安装）
   st.els.btn.addEventListener('click', () => {
-    st.busy = 'install';
-    st.status = 'installing';
+    const mode = st.status === 'done' ? 'uninstall' : 'install';
+    st.busy = mode;
+    st.status = mode === 'uninstall' ? 'uninstalling' : 'installing';
     st.msg = t('agent.starting');
     applyAgentState(st);
-    invoke('agent_install', { agent: a.id })
-      .catch((err) => {
-        st.status = 'failed';
-        st.msg = String(err);
-        applyAgentState(st);
-      });
-  });
-  st.els.ubtn.addEventListener('click', () => {
-    st.busy = 'uninstall';
-    st.status = 'uninstalling';
-    st.msg = t('agent.starting');
-    applyAgentState(st);
-    invoke('agent_uninstall', { agent: a.id })
+    invoke(mode === 'uninstall' ? 'agent_uninstall' : 'agent_install', { agent: a.id })
       .catch((err) => {
         st.status = 'failed';
         st.msg = String(err);
@@ -703,6 +681,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       st.msg = ok ? '' : t('agent.uninstallFail', event.payload.code);
       if (ok) {
         // 卸载成功后复查实际状态（npm/uv 可能残留）
+        st.busy = 'install';
         invoke('agent_installed', { agent: event.payload.agent }).then((inst) => {
           if (inst) st.status = 'done';
           applyAgentState(st);
@@ -712,6 +691,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       st.status = ok ? 'done' : 'failed';
       st.msg = ok ? '' : t('agent.installFail', event.payload.code);
+      st.busy = 'install';
     }
     applyAgentState(st);
   });
