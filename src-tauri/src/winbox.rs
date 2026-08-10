@@ -144,6 +144,11 @@ impl WinBox {
         // uv 工具目录：~/.local/bin（uv tool install 默认落点）已在 PATH 中；
         // 并让 uv 以后直接把工具装进 winbox/bin
         cmd.env("UV_TOOL_BIN_DIR", &bin_dir);
+        // npm 全局目录：强制 winbox 的 npm -g 装进 winbox/bin/nodejs（可移植，已在 PATH）。
+        // 否则读用户 .npmrc 的 prefix=d:\node 等系统路径，装完不在 PATH 上（prime-agent 教训）
+        cmd.env("npm_config_prefix", &node_dir);
+        // npm 缓存也进 winbox（完全自包含，不依赖 Windows 用户目录 %APPDATA%\npm-cache）
+        cmd.env("npm_config_cache", format!("{}/.npm-cache", app_dir));
         // TMPDIR：busybox-w32 无 /tmp，安装器 mktemp 需要可写临时目录
         let tmp_dir = self.root.join("app").join("tmp");
         let _ = std::fs::create_dir_all(&tmp_dir);
@@ -289,6 +294,8 @@ impl WinBox {
             .env("USERPROFILE", &app_dir)
             .env("TMPDIR", tmp_dir.to_string_lossy().replace('\\', "/"))
             .env("UV_TOOL_BIN_DIR", &bin_dir)
+            .env("npm_config_prefix", &node_dir)
+            .env("npm_config_cache", format!("{}/.npm-cache", app_dir))
             .current_dir(self.root.join("app"))
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -380,6 +387,8 @@ impl WinBox {
                 .env("PATH", &path)
                 .env("HOME", &app_dir)
                 .env("USERPROFILE", &app_dir)
+                .env("npm_config_prefix", &node_dir)
+                .env("npm_config_cache", format!("{}/.npm-cache", app_dir))
                 .args(["sh", "-c", &shim_arg])
                 .current_dir(self.root.join("app"))
                 .output()
