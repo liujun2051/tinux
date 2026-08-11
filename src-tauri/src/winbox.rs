@@ -265,22 +265,11 @@ impl WinBox {
             "opencode" => Self::has_bin_prefix(&nodejs, "opencode"),
             "kimi-code" => Self::has_bin_prefix(&nodejs, "kimi"),
             "hermes" => Self::has_bin_prefix(&local_bin, "hermes") || Self::has_bin_prefix(&bin, "hermes"),
-            "antigravity" => Self::has_bin_prefix(&nodejs, "antigravity"),
             "gemini-cli" => Self::has_bin_prefix(&nodejs, "gemini"),
-            "grok-build" => Self::has_bin_prefix(&nodejs, "grok"),
-            "cursor" => Self::has_bin_prefix(&nodejs, "cursor"),
             "qwen-code" => Self::has_bin_prefix(&nodejs, "qwen"),
-            "qoder" => Self::has_bin_prefix(&nodejs, "qoder"),
             "copilot" => Self::has_bin_prefix(&nodejs, "copilot"),
-            "pi" => Self::has_bin_prefix(&nodejs, "pi"),
-            "kiro" => Self::has_bin_prefix(&nodejs, "kiro"),
-            "kilo" => Self::has_bin_prefix(&nodejs, "kilo"),
             "mistral-vibe" => Self::has_bin_prefix(&local_bin, "mistral-vibe") || Self::has_bin_prefix(&bin, "mistral-vibe"),
-            "deepseek-tui" => Self::has_bin_prefix(&nodejs, "deepseek"),
-            "reasonix" => Self::has_bin_prefix(&nodejs, "reasonix"),
             "aider" => Self::has_bin_prefix(&local_bin, "aider") || Self::has_bin_prefix(&bin, "aider"),
-            "devin" => Self::has_bin_prefix(&nodejs, "devin"),
-            "trae" => Self::has_bin_prefix(&nodejs, "trae"),
             _ => false,
         }
     }
@@ -314,13 +303,6 @@ impl WinBox {
             ("aider", false) => (uv.clone(), vec!["tool", "uninstall", "aider-chat"]),
             ("mistral-vibe", true) => (uv.clone(), vec!["tool", "install", "mistral-vibe"]),
             ("mistral-vibe", false) => (uv.clone(), vec!["tool", "uninstall", "mistral-vibe"]),
-            // 包名未核实（antigravity/cursor/grok-build/qoder/pi/kilo/kiro/deepseek-tui/reasonix/devin/trae）：
-            // 同名 npm 包可能是抢注/无关项目（antigravity=placeholder、devin=个人名、trae=HTTP 客户端），
-            // 安装命令待补，避免装错
-            ("antigravity", _) | ("cursor", _) | ("grok-build", _) | ("qoder", _) | ("pi", _) | ("kilo", _)
-            | ("kiro", _) | ("deepseek-tui", _) | ("reasonix", _) | ("devin", _) | ("trae", _) => {
-                return Err(format!("install command not configured for {}", agent))
-            }
             _ => return Err(format!("unknown agent: {}", agent)),
         };
         Ok((prog, args))

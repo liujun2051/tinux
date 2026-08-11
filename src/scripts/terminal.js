@@ -452,22 +452,11 @@ const AGENTS = [
   { id: 'hermes', name: 'Hermes', pkg: 'hermes-agent', icon: 'assets/agents/04_Hermes.png' },
   { id: 'opencode', name: 'OpenCode', pkg: 'opencode-ai', icon: 'assets/agents/03_OpenCode.png' },
   { id: 'kimi-code', name: 'Kimi Code', pkg: '@moonshot-ai/kimi-code', icon: 'assets/agents/08_Kimi_CLI.png' },
-  { id: 'antigravity', name: 'Antigravity', pkg: '(安装命令待配置)', icon: 'assets/agents/05_Antigravity.png' },
   { id: 'gemini-cli', name: 'Gemini CLI', pkg: '@google/gemini-cli', icon: 'assets/agents/06_Gemini_CLI.png' },
-  { id: 'grok-build', name: 'Grok Build', pkg: '(安装命令待配置)', icon: 'assets/agents/07_Grok_Build.png' },
-  { id: 'cursor', name: 'Cursor Agent', pkg: '(安装命令待配置)', icon: 'assets/agents/09_Cursor_Agent.png' },
   { id: 'qwen-code', name: 'Qwen Code', pkg: '@qwen-code/qwen-code', icon: 'assets/agents/10_Qwen_Code.png' },
-  { id: 'qoder', name: 'Qoder', pkg: '(安装命令待配置)', icon: 'assets/agents/11_Qoder_CLI.png' },
   { id: 'copilot', name: 'GitHub Copilot', pkg: '@github/copilot', icon: 'assets/agents/12_GitHub_Copilot.png' },
-  { id: 'pi', name: 'Pi', pkg: '(安装命令待配置)', icon: 'assets/agents/13_Pi.png' },
-  { id: 'kiro', name: 'Kiro CLI', pkg: '(安装命令待配置)', icon: 'assets/agents/14_Kiro_CLI.png' },
-  { id: 'kilo', name: 'Kilo', pkg: '(安装命令待配置)', icon: 'assets/agents/15_Kilo.png' },
   { id: 'mistral-vibe', name: 'Mistral Vibe', pkg: 'mistral-vibe', icon: 'assets/agents/16_Mistral_Vibe.png' },
-  { id: 'deepseek-tui', name: 'DeepSeek TUI', pkg: '(安装命令待配置)', icon: 'assets/agents/17_DeepSeek_TUI.png' },
-  { id: 'reasonix', name: 'Reasonix', pkg: '(安装命令待配置)', icon: 'assets/agents/18_Reasonix.png' },
-  { id: 'aider', name: 'Aider', pkg: 'aider-chat', icon: 'assets/agents/19_Aider.png' },
-  { id: 'devin', name: 'Devin', pkg: '(安装命令待配置)', icon: 'assets/agents/20_Devin.png' },
-  { id: 'trae', name: 'Trae CLI', pkg: '(安装命令待配置)', icon: 'assets/agents/21_Trae_CLI.png' }
+  { id: 'aider', name: 'Aider', pkg: 'aider-chat', icon: 'assets/agents/19_Aider.png' }
 ];
 
 // agent 状态表: id -> { status: idle|installing|done|failed, msg, els }
