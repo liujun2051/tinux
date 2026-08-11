@@ -1,4 +1,4 @@
-## winux, A mini Linux shell for Windows
+## A super tiny Linux for Windows
 
 **A super tiny Linux for Windows — no VM, no WSL.**
 
