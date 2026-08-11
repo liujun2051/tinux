@@ -303,33 +303,22 @@ impl WinBox {
             ("kimi-code", false) => (npm.clone(), vec!["uninstall", "-g", "@moonshot-ai/kimi-code"]),
             ("hermes", true) => (uv.clone(), vec!["tool", "install", "hermes-agent"]),
             ("hermes", false) => (uv.clone(), vec!["tool", "uninstall", "hermes-agent"]),
-            // ---- 扩展 agent（2026-08-11 coding_agents_logos） ----
-            ("antigravity", true) => (npm.clone(), vec!["install", "-g", "antigravity@latest"]),
-            ("antigravity", false) => (npm.clone(), vec!["uninstall", "-g", "antigravity"]),
+            // ---- 扩展 agent（2026-08-11 coding_agents_logos；包名经 registry 描述核实） ----
             ("gemini-cli", true) => (npm.clone(), vec!["install", "-g", "@google/gemini-cli@latest"]),
             ("gemini-cli", false) => (npm.clone(), vec!["uninstall", "-g", "@google/gemini-cli"]),
-            ("cursor", true) => (npm.clone(), vec!["install", "-g", "cursor-agent@latest"]),
-            ("cursor", false) => (npm.clone(), vec!["uninstall", "-g", "cursor-agent"]),
             ("qwen-code", true) => (npm.clone(), vec!["install", "-g", "@qwen-code/qwen-code@latest"]),
             ("qwen-code", false) => (npm.clone(), vec!["uninstall", "-g", "@qwen-code/qwen-code"]),
             ("copilot", true) => (npm.clone(), vec!["install", "-g", "@github/copilot@latest"]),
             ("copilot", false) => (npm.clone(), vec!["uninstall", "-g", "@github/copilot"]),
-            ("kiro", true) => (npm.clone(), vec!["install", "-g", "kiro-cli@latest"]),
-            ("kiro", false) => (npm.clone(), vec!["uninstall", "-g", "kiro-cli"]),
-            ("deepseek-tui", true) => (npm.clone(), vec!["install", "-g", "deepseek-tui@latest"]),
-            ("deepseek-tui", false) => (npm.clone(), vec!["uninstall", "-g", "deepseek-tui"]),
-            ("reasonix", true) => (npm.clone(), vec!["install", "-g", "reasonix@latest"]),
-            ("reasonix", false) => (npm.clone(), vec!["uninstall", "-g", "reasonix"]),
-            ("devin", true) => (npm.clone(), vec!["install", "-g", "devin@latest"]),
-            ("devin", false) => (npm.clone(), vec!["uninstall", "-g", "devin"]),
-            ("trae", true) => (npm.clone(), vec!["install", "-g", "trae@latest"]),
-            ("trae", false) => (npm.clone(), vec!["uninstall", "-g", "trae"]),
             ("aider", true) => (uv.clone(), vec!["tool", "install", "aider-chat"]),
             ("aider", false) => (uv.clone(), vec!["tool", "uninstall", "aider-chat"]),
             ("mistral-vibe", true) => (uv.clone(), vec!["tool", "install", "mistral-vibe"]),
             ("mistral-vibe", false) => (uv.clone(), vec!["tool", "uninstall", "mistral-vibe"]),
-            // 包名未确认（grok-build/qoder/pi/kilo），安装命令待补
-            ("grok-build", _) | ("qoder", _) | ("pi", _) | ("kilo", _) => {
+            // 包名未核实（antigravity/cursor/grok-build/qoder/pi/kilo/kiro/deepseek-tui/reasonix/devin/trae）：
+            // 同名 npm 包可能是抢注/无关项目（antigravity=placeholder、devin=个人名、trae=HTTP 客户端），
+            // 安装命令待补，避免装错
+            ("antigravity", _) | ("cursor", _) | ("grok-build", _) | ("qoder", _) | ("pi", _) | ("kilo", _)
+            | ("kiro", _) | ("deepseek-tui", _) | ("reasonix", _) | ("devin", _) | ("trae", _) => {
                 return Err(format!("install command not configured for {}", agent))
             }
             _ => return Err(format!("unknown agent: {}", agent)),
