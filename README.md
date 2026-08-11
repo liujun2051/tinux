@@ -1,6 +1,6 @@
-# A super tiny Linux for Windows — no VM, no WSL
+# AI-Agent Friendly Linux Shell for Windows
 
-where multiple AI agents coexist harmoniously — Claude Code, Codex, OpenCode, OpenClaw, Hermes, etc.
+where Claude Code, Codex, OpenClaw, Hermes run smoothly
 
 [![点击播放演示视频](screenshots/poster.png)](https://github.com/liujun2051/tinux/blob/main/screenshots/demo.mp4)
 
