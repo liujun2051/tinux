@@ -1,5 +1,17 @@
 # winux
 
+> **Run Claude Code, Codex & OpenClaw on Windows — no WSL, no install.**
+>
+> **Self-contained Linux-style shell with Node, Python, npm & uv built in.**
+>
+> **Boots in seconds on any Windows box — from dev machines to locked-down servers.**
+
+> **Windows 上直接跑 Claude Code / Codex / OpenClaw / Kimi —— 不用装 WSL，无需安装**
+>
+> **自带 Node / Python / npm / uv / busybox 的自包含 Linux 风格环境，秒开**
+>
+> **任何 Windows 机器即开即用——从开发机到锁定严格的服务器**
+
 ![截图](screenshots/111.png)
 
 ![截图](screenshots/222.png)
