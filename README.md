@@ -1,10 +1,10 @@
-# winux
+## winux
 
-> **A mini Linux shell for Windows, where multiple AI agents run shoulder by shoulder — Claude Code, Codex, OpenClaw, Hermes, OpenCode, etc. — no WSL needed.**
+**A mini Linux shell for Windows, where multiple AI agents run shoulder by shoulder — Claude Code, Codex, OpenClaw, Hermes, OpenCode, etc. — no WSL needed.**
 
-![winux demo](screenshots/demo.mp4)
+[▶ Watch the demo](screenshots/demo.mp4)
 
-## 设计原则：自包含的独立子系统
+**设计原则：自包含的独立子系统**
 
 winux 内的 winbox 是一个**完全独立、自包含的 Linux 风格子系统**，与 Windows 上的
 node/python/npm 等工具链**没有任何依赖关系**：
