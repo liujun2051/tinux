@@ -1,6 +1,6 @@
 # winux
 
-> **A Linux Shell for Windows that runs Claude Code, Codex, OpenClaw, Hermes, OpenCode & Kimi Code — no WSL needed.**
+> **A mini Linux shell for Windows, where multiple AI agents run shoulder by shoulder — Claude Code, Codex, OpenClaw, Hermes, OpenCode, etc. — no WSL needed.**
 
 <video src="screenshots/demo.mp4" controls width="100%"></video>
 
