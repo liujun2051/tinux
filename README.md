@@ -2,9 +2,7 @@
 
 > **A Linux Shell for Windows that runs Claude Code, Codex, OpenClaw, Hermes, OpenCode & Kimi Code — no WSL needed.**
 
-![截图](screenshots/111.png)
-
-![截图](screenshots/222.png)
+<video src="screenshots/demo.mp4" controls width="100%"></video>
 
 ## 设计原则：自包含的独立子系统
 
