@@ -1,16 +1,12 @@
 # winux
 
-> **Multiple AI Agents in One Shell.**
+> **Run Claude Code, Codex, OpenClaw, Hermes, OpenCode & Kimi Code in One Shell — No WSL needed.**
 >
-> **Run Claude Code, Codex, OpenClaw & Kimi side by side — no WSL, no install.**
+> **一个终端并排跑 Claude Code / Codex / OpenClaw / Hermes / OpenCode / Kimi Code —— 无需 WSL。**
 >
-> **A self-contained Linux-style shell that boots in seconds on any Windows machine.**
-
-> **一个终端，多个 AI Agent 并排跑。**
+> **A Linux Shell on Windows that also runs Windows commands.**
 >
-> **Claude Code / Codex / OpenClaw / Kimi 同时开工——不用装 WSL，无需安装**
->
-> **自带 Linux 风格环境的自包含 shell，任何 Windows 机器秒开即用**
+> **Windows 上的 Linux Shell，同时兼容 Windows 命令（ipconfig / powershell 都能用）。**
 
 ![截图](screenshots/111.png)
 
