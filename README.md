@@ -2,9 +2,9 @@
 
 **A mini Linux shell for Windows, where multiple AI agents run shoulder by shoulder — Claude Code, Codex, OpenClaw, Hermes, OpenCode, etc. — no WSL needed.**
 
-<video src="screenshots/demo.mp4" controls="controls" style="max-width: 730px;"></video>
+<video src="https://media.githubusercontent.com/media/liujun2051/winux/main/screenshots/demo.mp4" controls="controls" style="max-width: 730px;"></video>
 
-[▶ 视频无法显示时，点击直接打开](screenshots/demo.mp4)
+[▶ 视频无法显示时，点击直接打开](https://github.com/liujun2051/winux/blob/main/screenshots/demo.mp4)
 
 **设计原则：自包含的独立子系统**
 
