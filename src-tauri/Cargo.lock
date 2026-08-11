@@ -3206,6 +3206,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinux"
+version = "0.2.0"
+dependencies = [
+ "encoding_rs",
+ "lazy_static",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "winapi",
+]
+
+[[package]]
 name = "tinystr"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4051,20 +4065,6 @@ checksum = "a277a57398d4bfa075df44f501a17cfdf8542d224f0d36095a2adc7aee4ef0a5"
 dependencies = [
  "cfg-if",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "winux"
-version = "0.2.0"
-dependencies = [
- "encoding_rs",
- "lazy_static",
- "portable-pty",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "winapi",
 ]
 
 [[package]]

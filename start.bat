@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-rem feier-three start: assemble runtime if missing, then launch the dev app.
+rem tinux start: assemble runtime if missing, then launch the dev app.
 if not exist winbox\bin\busybox.exe (
     echo First run: assembling winbox runtime...
     call init.bat

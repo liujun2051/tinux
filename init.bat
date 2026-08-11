@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-rem feier-three init: assemble the winbox runtime (source repo excludes it).
+rem tinux init: assemble the winbox runtime (source repo excludes it).
 rem Requires: curl + tar (built into Win10); needs network access.
 setlocal
 
@@ -36,7 +36,7 @@ mkdir winbox\usr\lib 2>nul
 copy /y runtime\minilinux.sh winbox\usr\lib\minilinux.sh >nul
 
 echo.
-echo Done! Run start.bat to launch feier-three.
+echo Done! Run start.bat to launch tinux.
 exit /b 0
 
 :err

@@ -1,4 +1,4 @@
-# mini-linux 伪装层 (feier-three)
+# mini-linux 伪装层 (tinux)
 # 由 winbox.rs 注入 ENV 环境变量，busybox ash 交互模式启动时自动 source：
 #   - uname → Linux 伪装
 #   - PS1 定制提示符
@@ -22,10 +22,10 @@ uname() {
       -o | --operating-system)   out="$out GNU/Linux" ;;
       -m | --machine | -p | --processor | -i | --hardware-platform)
                                  out="$out x86_64" ;;
-      -r | --kernel-release)     out="$out 5.15.0-feier" ;;
-      -n | --nodename)           out="$out feier-one" ;;
+      -r | --kernel-release)     out="$out 5.15.0-tinux" ;;
+      -n | --nodename)           out="$out tinux" ;;
       -v | --kernel-version)     out="$out #1 SMP PREEMPT_DYNAMIC mini-linux" ;;
-      -a | --all)                out="$out Linux feier-one 5.15.0-feier #1 SMP PREEMPT_DYNAMIC mini-linux x86_64 GNU/Linux" ;;
+      -a | --all)                out="$out Linux tinux 5.15.0-tinux #1 SMP PREEMPT_DYNAMIC mini-linux x86_64 GNU/Linux" ;;
       *)                         out="$out $(command uname "$flag")" ;;
     esac
   done
@@ -42,7 +42,7 @@ video() {
 # help：打印帮助文本
 help() {
   cat <<'EOF'
-feier-two 内置命令：
+tinux 内置命令：
   video <URL>   播放远程视频（前端播放器，Esc 关闭）
   help          显示此帮助
   pwd           显示当前目录（真实路径）

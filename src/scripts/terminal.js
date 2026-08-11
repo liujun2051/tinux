@@ -1,4 +1,4 @@
-// feier-three (v3) 终端：多 panel —— 每个 panel 一个 xterm.js + 一个 ConPTY shell 会话
+// tinux 终端：多 panel —— 每个 panel 一个 xterm.js + 一个 ConPTY shell 会话
 const { appWindow } = window.__TAURI__.window;
 const { invoke } = window.__TAURI__.tauri;
 const { listen } = window.__TAURI__.event;

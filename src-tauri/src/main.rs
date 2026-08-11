@@ -191,5 +191,5 @@ fn main() {
             close_window
         ])
         .run(tauri::generate_context!())
-        .expect("error while running feier-one");
+        .expect("error while running tinux");
 }
