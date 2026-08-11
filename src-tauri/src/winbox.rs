@@ -265,6 +265,22 @@ impl WinBox {
             "opencode" => Self::has_bin_prefix(&nodejs, "opencode"),
             "kimi-code" => Self::has_bin_prefix(&nodejs, "kimi"),
             "hermes" => Self::has_bin_prefix(&local_bin, "hermes") || Self::has_bin_prefix(&bin, "hermes"),
+            "antigravity" => Self::has_bin_prefix(&nodejs, "antigravity"),
+            "gemini-cli" => Self::has_bin_prefix(&nodejs, "gemini"),
+            "grok-build" => Self::has_bin_prefix(&nodejs, "grok"),
+            "cursor" => Self::has_bin_prefix(&nodejs, "cursor"),
+            "qwen-code" => Self::has_bin_prefix(&nodejs, "qwen"),
+            "qoder" => Self::has_bin_prefix(&nodejs, "qoder"),
+            "copilot" => Self::has_bin_prefix(&nodejs, "copilot"),
+            "pi" => Self::has_bin_prefix(&nodejs, "pi"),
+            "kiro" => Self::has_bin_prefix(&nodejs, "kiro"),
+            "kilo" => Self::has_bin_prefix(&nodejs, "kilo"),
+            "mistral-vibe" => Self::has_bin_prefix(&local_bin, "mistral-vibe") || Self::has_bin_prefix(&bin, "mistral-vibe"),
+            "deepseek-tui" => Self::has_bin_prefix(&nodejs, "deepseek"),
+            "reasonix" => Self::has_bin_prefix(&nodejs, "reasonix"),
+            "aider" => Self::has_bin_prefix(&local_bin, "aider") || Self::has_bin_prefix(&bin, "aider"),
+            "devin" => Self::has_bin_prefix(&nodejs, "devin"),
+            "trae" => Self::has_bin_prefix(&nodejs, "trae"),
             _ => false,
         }
     }
@@ -287,6 +303,35 @@ impl WinBox {
             ("kimi-code", false) => (npm.clone(), vec!["uninstall", "-g", "@moonshot-ai/kimi-code"]),
             ("hermes", true) => (uv.clone(), vec!["tool", "install", "hermes-agent"]),
             ("hermes", false) => (uv.clone(), vec!["tool", "uninstall", "hermes-agent"]),
+            // ---- 扩展 agent（2026-08-11 coding_agents_logos） ----
+            ("antigravity", true) => (npm.clone(), vec!["install", "-g", "antigravity@latest"]),
+            ("antigravity", false) => (npm.clone(), vec!["uninstall", "-g", "antigravity"]),
+            ("gemini-cli", true) => (npm.clone(), vec!["install", "-g", "@google/gemini-cli@latest"]),
+            ("gemini-cli", false) => (npm.clone(), vec!["uninstall", "-g", "@google/gemini-cli"]),
+            ("cursor", true) => (npm.clone(), vec!["install", "-g", "cursor-agent@latest"]),
+            ("cursor", false) => (npm.clone(), vec!["uninstall", "-g", "cursor-agent"]),
+            ("qwen-code", true) => (npm.clone(), vec!["install", "-g", "@qwen-code/qwen-code@latest"]),
+            ("qwen-code", false) => (npm.clone(), vec!["uninstall", "-g", "@qwen-code/qwen-code"]),
+            ("copilot", true) => (npm.clone(), vec!["install", "-g", "@github/copilot@latest"]),
+            ("copilot", false) => (npm.clone(), vec!["uninstall", "-g", "@github/copilot"]),
+            ("kiro", true) => (npm.clone(), vec!["install", "-g", "kiro-cli@latest"]),
+            ("kiro", false) => (npm.clone(), vec!["uninstall", "-g", "kiro-cli"]),
+            ("deepseek-tui", true) => (npm.clone(), vec!["install", "-g", "deepseek-tui@latest"]),
+            ("deepseek-tui", false) => (npm.clone(), vec!["uninstall", "-g", "deepseek-tui"]),
+            ("reasonix", true) => (npm.clone(), vec!["install", "-g", "reasonix@latest"]),
+            ("reasonix", false) => (npm.clone(), vec!["uninstall", "-g", "reasonix"]),
+            ("devin", true) => (npm.clone(), vec!["install", "-g", "devin@latest"]),
+            ("devin", false) => (npm.clone(), vec!["uninstall", "-g", "devin"]),
+            ("trae", true) => (npm.clone(), vec!["install", "-g", "trae@latest"]),
+            ("trae", false) => (npm.clone(), vec!["uninstall", "-g", "trae"]),
+            ("aider", true) => (uv.clone(), vec!["tool", "install", "aider-chat"]),
+            ("aider", false) => (uv.clone(), vec!["tool", "uninstall", "aider-chat"]),
+            ("mistral-vibe", true) => (uv.clone(), vec!["tool", "install", "mistral-vibe"]),
+            ("mistral-vibe", false) => (uv.clone(), vec!["tool", "uninstall", "mistral-vibe"]),
+            // 包名未确认（grok-build/qoder/pi/kilo），安装命令待补
+            ("grok-build", _) | ("qoder", _) | ("pi", _) | ("kilo", _) => {
+                return Err(format!("install command not configured for {}", agent))
+            }
             _ => return Err(format!("unknown agent: {}", agent)),
         };
         Ok((prog, args))
