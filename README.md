@@ -1,12 +1,6 @@
 # winux
 
-> **Run Claude Code, Codex, OpenClaw, Hermes, OpenCode & Kimi Code in One Shell — No WSL needed.**
->
-> **一个终端并排跑 Claude Code / Codex / OpenClaw / Hermes / OpenCode / Kimi Code —— 无需 WSL。**
->
-> **A Linux Shell on Windows that also runs Windows commands.**
->
-> **Windows 上的 Linux Shell，同时兼容 Windows 命令（ipconfig / powershell 都能用）。**
+> **A Linux Shell for Windows that runs Claude Code, Codex, OpenClaw, Hermes, OpenCode & Kimi Code — no WSL needed.**
 
 ![截图](screenshots/111.png)
 
