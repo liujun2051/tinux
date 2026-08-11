@@ -224,8 +224,20 @@ function buildDom(node) {
 
 function safeFit(p) {
   if (p.container.offsetWidth > 0 && p.container.offsetHeight > 0) {
+    // 字体/字号变更后 fit 会按新字符尺寸 resize（隐藏 tab 切回时同样处理）
     try { p.fit.fit(); } catch (_) { /* 尺寸未就绪 */ }
+    forceTermRedraw(p);
   }
+}
+
+// 强制渲染服务整屏重绘：xterm 5.3 没有公开 refresh()，且新旧字体度量相同时
+// fit 不会触发 resize，画面会停留在旧字体。访问 _core._renderService 与
+// fit addon 自身一致（vendor 版本固定，可安全使用）。
+function forceTermRedraw(p) {
+  try {
+    const svc = p.term._core && p.term._core._renderService;
+    if (svc && typeof svc._fullRefresh === 'function') svc._fullRefresh();
+  } catch (_) { /* 内部 API 变动时静默降级（fit 仍会处理度量不同的字体） */ }
 }
 
 // 查找叶子节点及其父节点
@@ -334,8 +346,38 @@ function applySettings() {
       cursor: s.cursor,
       selectionBackground: hexToRgba(s.cursor, 0.25)
     };
-    try { p.fit.fit(); } catch (_) {}
   }
+  // 字体变更后 xterm 会自动重测字符宽度（fontFamily/fontSize 的 options 监听），
+  // fit 会用新尺寸 resize 并触发全量重绘；度量相同时 fit 不生效，用 forceTermRedraw 兜底。
+  requestAnimationFrame(() => {
+    for (const p of panels.values()) {
+      try { p.fit.fit(); } catch (_) { /* 隐藏 tab 容器无尺寸，切回时由 safeFit 补 */ }
+      forceTermRedraw(p);
+    }
+  });
+}
+
+// 用系统全部字体填充设置面板的下拉（保留当前值，可能是自定义字体链）
+async function populateFontList() {
+  const sel = document.getElementById('set-font');
+  if (!sel) return;
+  try {
+    const fonts = await window.__TAURI__.tauri.invoke('list_fonts');
+    const current = SETTINGS.fontFamily;
+    const first = document.createElement('option');
+    first.value = current;
+    first.textContent = current;
+    sel.innerHTML = '';
+    sel.appendChild(first);
+    for (const name of fonts) {
+      if (name === current) continue;
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    }
+    sel.value = current;
+  } catch (_) { /* 后端不可用时保留初始选项 */ }
 }
 
 // 设置面板（模态）
@@ -621,6 +663,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 国际化：先按 Windows 显示语言切文案，再构建 UI
   await detectLanguage();
   applyI18n();
+  populateFontList(); // 系统字体下拉（异步填充，打开设置时已就绪）
 
   // 标题栏
   document.getElementById('titlebar-minimize').addEventListener('click', () => appWindow.minimize());
@@ -631,7 +674,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('agents-close').addEventListener('click', closeAgents);
 
   // 版本号（构建时间戳，精确到秒）
-  const BUILD_TS = '2026-08-10 09:30:13';
+  const BUILD_TS = '2026-08-11 12:54:22';
   try {
     const ver = await window.__TAURI__.app.getVersion();
     document.getElementById('titlebar-version').textContent = `v${ver} · ${BUILD_TS}`;

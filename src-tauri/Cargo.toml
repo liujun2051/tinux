@@ -16,8 +16,8 @@ serde_json = "1"
 lazy_static = "1.4"
 encoding_rs = "0.8"
 portable-pty = "0.9.0"
-# 读取 Windows 显示语言（前端文案本地化）
-winapi = { version = "0.3", features = ["winnls"] }
+# 读取 Windows 显示语言（前端文案本地化）+ 枚举系统字体
+winapi = { version = "0.3", features = ["winnls", "wingdi", "winuser"] }
 
 [features]
 default = ["custom-protocol"]

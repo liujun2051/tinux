@@ -98,6 +98,58 @@ fn get_os_language() -> String {
     }
 }
 
+// ---- 系统字体枚举（设置面板字体下拉） ----
+static FONT_NAMES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+unsafe extern "system" fn enum_font_proc(
+    lplf: *const winapi::um::wingdi::LOGFONTW,
+    _lptm: *const winapi::um::wingdi::TEXTMETRICW,
+    _font_type: winapi::ctypes::c_ulong,
+    _lparam: isize,
+) -> winapi::ctypes::c_int {
+    let name = {
+        let face = (*lplf).lfFaceName;
+        let len = face.iter().position(|&c| c == 0).unwrap_or(face.len());
+        String::from_utf16_lossy(&face[..len])
+    };
+    // 过滤空名与 @ 前缀（@字体是 Windows 的竖排变体，如 @微软雅黑/@fixedsys，
+    // CSS font-family 不接受，选了也不会生效）
+    if !name.is_empty() && !name.starts_with('@') {
+        if let Ok(mut v) = FONT_NAMES.lock() {
+            if !v.contains(&name) {
+                v.push(name);
+            }
+        }
+    }
+    1 // 继续枚举
+}
+
+// 返回当前系统安装的全部字体族名（排序去重）
+#[tauri::command]
+fn list_fonts() -> Vec<String> {
+    use winapi::um::wingdi::{EnumFontFamiliesExW, LOGFONTW};
+    use winapi::um::winuser::{GetDC, ReleaseDC};
+    unsafe {
+        if let Ok(mut v) = FONT_NAMES.lock() {
+            v.clear();
+        }
+        let hdc = GetDC(std::ptr::null_mut());
+        if !hdc.is_null() {
+            let mut lf: LOGFONTW = std::mem::zeroed();
+            lf.lfCharSet = 1; // DEFAULT_CHARSET：枚举全部字符集
+            EnumFontFamiliesExW(hdc, &mut lf, Some(enum_font_proc), 0, 0);
+            ReleaseDC(std::ptr::null_mut(), hdc);
+        }
+    }
+    let mut names = FONT_NAMES
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    names.sort();
+    names.dedup();
+    names
+}
+
 // 最小化窗口
 #[tauri::command]
 fn minimize_window(window: tauri::Window) -> Result<(), String> {
@@ -133,6 +185,7 @@ fn main() {
             agent_install,
             agent_uninstall,
             get_os_language,
+            list_fonts,
             minimize_window,
             maximize_window,
             close_window
