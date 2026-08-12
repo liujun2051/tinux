@@ -595,9 +595,8 @@ function writeChunk(p, text) {
   }
 }
 
-// 同步输出 (DECSET 2026) shim：xterm 5.3 不支持，自行缓冲到 2026l 再一次性提交
+// 同步输出 (DECSET 2026) 处理：不做帧缓冲 shim，直接剥离序列做原生增量渲染。
 // 序列长度：\x1b[?2026h / \x1b[?2026l 均为 8 字节；可能跨 16KB 分块截断，仅在结尾疑似前缀时暂存尾巴
-// （mimo 依赖 2026；xterm 6 原生支持但渲染器有叠影问题，5.3+shim 为最佳已验证组合）
 const SYNC_SEQ = ['\x1b[?2026h', '\x1b[?2026l', '\x1b[?2026', '\x1b[?202', '\x1b[?20', '\x1b[?2', '\x1b[?', '\x1b['];
 const SYNC_LEN = 8;
 
@@ -614,54 +613,17 @@ function onShellOutput(sid, text) {
   const combined = p.syncTail + text;
   p.syncTail = '';
 
-  // 常规输出（无 2026）：直接渲染，仅暂存可能跨块的序列尾巴
-  if (!combined.includes('\x1b[?2026')) {
-    const tail = trailingSyncTail(combined);
-    if (tail) {
-      p.syncTail = combined.slice(-tail);
-      writeChunk(p, combined.slice(0, -tail));
-    } else {
-      writeChunk(p, combined);
-    }
-    return;
-  }
-
-  let rest = combined;
-  let guard = 0;
-  while (rest.length && guard++ < 2000) {
-    if (p.syncOn) {
-      const end = rest.indexOf('\x1b[?2026l');
-      if (end === -1) {
-        const tail = trailingSyncTail(rest);
-        if (tail) {
-          p.syncBuf += rest.slice(0, -tail);
-          p.syncTail = rest.slice(-tail);
-        } else {
-          p.syncBuf += rest;
-        }
-        break;
-      }
-      p.syncBuf += rest.slice(0, end);
-      p.syncOn = false;
-      writeChunk(p, p.syncBuf); // 整帧原子提交
-      p.syncBuf = '';
-      rest = rest.slice(end + SYNC_LEN);
-    } else {
-      const start = rest.indexOf('\x1b[?2026h');
-      if (start === -1) {
-        const tail = trailingSyncTail(rest);
-        if (tail) {
-          writeChunk(p, rest.slice(0, -tail));
-          p.syncTail = rest.slice(-tail);
-        } else {
-          writeChunk(p, rest);
-        }
-        break;
-      }
-      writeChunk(p, rest.slice(0, start));
-      p.syncOn = true;
-      rest = rest.slice(start + SYNC_LEN);
-    }
+  // 策略：不做 2026 同步帧缓冲，直接剥离同步序列，只保留质朴的原生增量渲染。
+  // \x1b[?2026h/l 只是"整帧绘制"的性能提示；剥离后内容照常逐块显示，
+  // 没有乱序/花屏问题（代价是 TUI 可能偶发绘制闪烁，可接受）。
+  const cleaned = combined.replace(/\x1b\[\?2026[hl]/g, '');
+  // 跨块截断的序列尾巴仍需暂存（序列可能被 16KB 分块切成两半）
+  const tail = trailingSyncTail(cleaned);
+  if (tail) {
+    p.syncTail = cleaned.slice(-tail);
+    writeChunk(p, cleaned.slice(0, -tail));
+  } else {
+    writeChunk(p, cleaned);
   }
 }
 
