@@ -117,6 +117,12 @@ class TelnetSession(threading.Thread):
 
     def loop(self):
         sockbuf = b""
+        outbuf = b""   # pty -> 客户端 输出批处理缓冲
+        last_out = 0.0
+        try:
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
         while True:
             try:
                 chunk = self.sock.recv(4096)
@@ -130,14 +136,15 @@ class TelnetSession(threading.Thread):
                 log("recv EOF (client closed)")
                 break
             timed_out = False
-            sockbuf += chunk
-            data, sockbuf = self.process_client(sockbuf)
-            if data:
-                try:
-                    self.pty.write(data.decode("utf-8", "replace"))
-                except Exception as e:
-                    log(f"pty write err: {e!r}")
-                    break
+            if chunk:
+                sockbuf += chunk
+                data, sockbuf = self.process_client(sockbuf)
+                if data:
+                    try:
+                        self.pty.write(data.decode("utf-8", "replace"))
+                    except Exception as e:
+                        log(f"pty write err: {e!r}")
+                        break
             try:
                 out = self.pty.read(blocking=False)
             except Exception as e:
@@ -146,9 +153,23 @@ class TelnetSession(threading.Thread):
             if out:
                 if isinstance(out, str):
                     out = out.encode("utf-8", "replace")
-                # telnet 网络换行：裸 \n -> \r\n（已 \r\n 的不重复转换）
-                self.sock.sendall(out.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
-            time.sleep(0.01)
+                outbuf += out.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+                last_out = time.time()
+            # 批处理：busybox 行编辑器逐字符输出（\x1b[1;9H + char），单独发会
+            # 产生大量网络小包导致客户端闪烁/跳跃。空闲 20ms 或攒够 8KB 再发送。
+            if outbuf and (time.time() - last_out >= 0.02 or len(outbuf) >= 8192):
+                try:
+                    self.sock.sendall(outbuf)
+                except OSError:
+                    break
+                outbuf = b""
+            time.sleep(0.005)
+        # 会话结束前把剩余输出发完
+        if outbuf:
+            try:
+                self.sock.sendall(outbuf)
+            except OSError:
+                pass
 
     def process_client(self, buf):
         out = bytearray()
