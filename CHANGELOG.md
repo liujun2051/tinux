@@ -1,5 +1,12 @@
 # tinux 修复日志
 
+## v0.2.8（2026-08-13）
+- **half clear 根治**：tab 创建于窗口最小化/隐藏或字体度量未完成时，xterm 渲染
+  服务字符尺寸（cell）为 0，fit addon 静默失败、term 永久停在默认 24x80
+  （stty 可验证）→ clear 只清半屏且切换不恢复
+- robustFit：检测到 cell 为 0 自动延迟重试（250ms × 最多 40 次），fit 后显式
+  shell_resize 同步后端；窗口重新激活 / 缩放 / tab 切换时全量重对齐
+
 ## v0.2.7（2026-08-13）
 - 多 tab 切换不再销毁重建面板 DOM（xterm canvas 常驻），修复随机"clear 只清半屏"
 - 分割/关闭面板时才重建对应 tab 的 pane
