@@ -181,10 +181,15 @@ function switchTab(id) {
   const first = firstPanelId(currentTab().layout);
   if (first) {
     focusPanel(first);
-    // 切回时把该 tab 所有 panel 滚动到底部，避免手动拖
+    // 切回时把该 tab 所有 panel 滚动到底部 + 对齐尺寸（避免手动拖；
+    // robustFit 内含 cell 未就绪重试与显式 shell_resize）
     collectPanelIds(currentTab().layout).forEach((pid) => {
       const p = panels.get(pid);
-      if (p) p.term.scrollToBottom();
+      if (p) {
+        p.term.scrollToBottom();
+        robustFit(p);
+        forceTermRedraw(p);
+      }
     });
   }
 }
@@ -249,9 +254,37 @@ function buildDom(node) {
 function safeFit(p) {
   if (p.container.offsetWidth > 0 && p.container.offsetHeight > 0) {
     // 字体/字号变更后 fit 会按新字符尺寸 resize（隐藏 tab 切回时同样处理）
-    try { p.fit.fit(); } catch (_) { /* 尺寸未就绪 */ }
+    robustFit(p);
     forceTermRedraw(p);
   }
+}
+
+// fit 增强：xterm 渲染服务的字符尺寸（cell.width/height）未初始化时（如 tab
+// 创建于窗口最小化/隐藏、字体度量尚未完成），fit addon 会返回 null 静默跳过，
+// term 永久停在默认 24x80 —— 表现为该 tab 的 clear 只清半屏且切换不恢复。
+// 这里检测到 cell 尺寸为 0 时延迟重试，直到就绪；同时把对齐后的尺寸显式
+// 同步给后端（不依赖 onResize，防竞态丢失）。
+function robustFit(p) {
+  let cell = null;
+  try {
+    const svc = p.term._core && p.term._core._renderService;
+    cell = svc && svc.dimensions && svc.dimensions.css.cell;
+  } catch (_) { /* 内部 API 变动 */ }
+  if (cell && (cell.width === 0 || cell.height === 0)) {
+    if (!p.fitRetry) p.fitRetry = 0;
+    if (p.fitRetry < 40) {
+      p.fitRetry++;
+      setTimeout(() => { p.fitRetry--; robustFit(p); }, 250);
+    }
+    return false;
+  }
+  p.fitRetry = 0;
+  try { p.fit.fit(); } catch (_) { /* 尺寸未就绪 */ }
+  // 显式同步尺寸到后端（fit 触发 onResize 之外的双保险）
+  try {
+    invoke('shell_resize', { sessionId: p.id, rows: p.term.rows, cols: p.term.cols });
+  } catch (_) { /* 后端未就绪时由 pending_resize 兜底 */ }
+  return true;
 }
 
 // 强制渲染服务整屏重绘：xterm 5.3 没有公开 refresh()，且新旧字体度量相同时
@@ -377,7 +410,7 @@ function applySettings() {
   // fit 会用新尺寸 resize 并触发全量重绘；度量相同时 fit 不生效，用 forceTermRedraw 兜底。
   requestAnimationFrame(() => {
     for (const p of panels.values()) {
-      try { p.fit.fit(); } catch (_) { /* 隐藏 tab 容器无尺寸，切回时由 safeFit 补 */ }
+      robustFit(p);
       forceTermRedraw(p);
     }
   });
@@ -723,7 +756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('agents-close').addEventListener('click', closeAgents);
 
   // 版本号（构建时间戳，精确到秒）
-  const BUILD_TS = '2026-08-13 12:56:20';
+  const BUILD_TS = '2026-08-13 13:26:18';
   try {
     const ver = await window.__TAURI__.app.getVersion();
     document.getElementById('titlebar-version').textContent = `v${ver} · ${BUILD_TS}`;
@@ -788,9 +821,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyAgentState(st);
   });
 
-  // 窗口缩放 → 所有 panel 自适应
+  // 窗口缩放 → 所有 panel 自适应（robustFit 内含字符尺寸未就绪重试 + 显式 resize 同步）
   window.addEventListener('resize', () => {
-    for (const p of panels.values()) p.fit.fit();
+    for (const p of panels.values()) robustFit(p);
+  });
+
+  // 窗口重新激活：最小化/隐藏期间创建的 tab 字符尺寸可能未就绪
+  // （fit 静默失败停在默认 24x80，clear 只清半屏），激活时全量对齐
+  window.addEventListener('focus', () => {
+    for (const p of panels.values()) {
+      if (p.container.offsetWidth > 0 && p.container.offsetHeight > 0) {
+        robustFit(p);
+        forceTermRedraw(p);
+      }
+    }
   });
 
   // 布局稳定后校准一次尺寸（首次 fit 时容器可能未定型，避免 TUI 底部裁行）
