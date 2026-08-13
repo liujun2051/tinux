@@ -30,8 +30,17 @@
 - 应用图标换为 vicky.jpg（淡青色，多尺寸）
 
 ## v0.2.1（2026-08-13）
-- opencode 欢迎界面错行：管线保留裸 LF 行尾（不再改写 CRLF 导致列重置）
-- sync 帧（2026）内跨块内容统一进帧缓冲，不再直接渲染（修复错位/字面文本泄漏）
+- **opencode 欢迎界面错行**（"Ask 上一行"边框左移 2 列）解决过程：
+  - 症状：opencode 欢迎界面只有"Ask 上一行"的边框左移 2 列，其余正常
+  - 排查：capture.bin（ConPTY 原始流）含 6 个裸 LF（\r 69 个 / CRLF 69 个），
+    opencode 依赖 xterm 语义（裸 LF 只换行、列不变）做相对定位
+  - 根因一：writeChunk 按 \n 切行后统一补 '\r\n'，把列重置到 1 → 该行左移
+  - 根因二：sync 帧（2026）内容跨 16KB ConPTY 分块时绕过 syncBuf 直接渲染，
+    转义序列被截断成字面文本（回放 r-full-97.txt 出现字面 "[9;57H" 残留）
+  - 验证：repro-conpty/check_80.py 三路回放对比（raw 对齐 / 旧管线左移 2 列 /
+    LF 保留管线对齐）；oc-dump.bin 按 97/1024/16384 分块与 r-fix 基线逐字节一致
+  - 修复：writeChunk 保留原始行尾（line + '\n'，\r 已在 line 里）；
+    onShellOutput 在 syncOn 期间统一进帧缓冲，2026l 闭合时一次提交
 
 ## 新增（v0.2.1 起）
 - telnetd 自包含服务（runtime/telnetd.py + telnetd.bat）：ConPTY busybox sh，
