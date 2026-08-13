@@ -420,8 +420,17 @@ body {
   padding: 3px 8px;
 }
 
-/* 面板区（当前 tab 布局的宿主） */
+/* 面板区（tab 宿主容器） */
 .panel-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 每个 tab 的常驻 pane：切换只改 display，不销毁重建（重建会损坏 xterm canvas 渲染） */
+.tab-pane {
   flex: 1;
   display: flex;
   flex-direction: column;

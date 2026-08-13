@@ -203,6 +203,7 @@ function closeTab() {
     invoke('shell_stop', { sessionId: id });
     panels.delete(id);
   });
+  if (t.paneEl) t.paneEl.remove(); // 移除 tab 的常驻 pane DOM
   tabs.splice(idx, 1);
   activeTabId = tabs[Math.max(0, idx - 1)].id;
   renderTabs();
@@ -214,9 +215,22 @@ function closeTab() {
 // ---------- 布局树（二分分割：叶子 = panel，内点 = row/col 分割） ----------
 
 function render() {
-  panelArea.innerHTML = '';
-  const tab = currentTab();
-  if (tab) panelArea.appendChild(buildDom(tab.layout));
+  // 多 tab：每个 tab 一个常驻 pane，切换只改 display。
+  // 切勿每次重建 panelArea DOM——xterm 5.3 的 canvas 渲染不支持被外部
+  // 拆毁后再挂回（事件/渲染引用失效），随机出现 clear 只清半屏等异常。
+  // layout 结构变化（split/close）时由调用方把 paneEl 置 null 触发重建。
+  if (!tabs.length) return;
+  for (const t of tabs) {
+    if (!t.paneEl) {
+      const pane = document.createElement('div');
+      pane.className = 'tab-pane';
+      pane.style.display = 'none';
+      pane.appendChild(buildDom(t.layout));
+      panelArea.appendChild(pane);
+      t.paneEl = pane;
+    }
+    t.paneEl.style.display = t.id === activeTabId ? '' : 'none';
+  }
   requestAnimationFrame(() => {
     for (const p of panels.values()) safeFit(p);
   });
@@ -277,6 +291,7 @@ function splitPanel(dir) {
     tab.layout = splitNode;
   }
   createPanel(newId);
+  tab.paneEl = null; // layout 结构变化 → 重建该 tab 的 pane
   render();
   focusPanel(newId);
 }
@@ -300,6 +315,7 @@ function closePanel() {
   } else {
     tab.layout = null;
   }
+  tab.paneEl = null; // layout 结构变化 → 重建该 tab 的 pane
   render();
   const first = firstPanelId(tab.layout);
   if (first) focusPanel(first);
@@ -707,7 +723,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('agents-close').addEventListener('click', closeAgents);
 
   // 版本号（构建时间戳，精确到秒）
-  const BUILD_TS = '2026-08-13 12:34:20';
+  const BUILD_TS = '2026-08-13 12:56:20';
   try {
     const ver = await window.__TAURI__.app.getVersion();
     document.getElementById('titlebar-version').textContent = `v${ver} · ${BUILD_TS}`;
