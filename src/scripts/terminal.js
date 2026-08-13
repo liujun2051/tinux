@@ -584,7 +584,10 @@ function writeChunk(p, text) {
     if (line.startsWith('__FEIER__video:')) {
       openVideo(line.slice(15).trim());
     } else {
-      p.term.write(line + '\r\n');
+      // 保留原始行尾：split 是按 \n 切的，\r（若原始流为 CRLF）已留在 line 里。
+      // 不能统一补 '\r\n' —— opencode 等 TUI 用裸 LF（xterm 语义：只换行、列不变）
+      // 做相对定位，补 CR 会把列重置到 1，导致欢迎界面 "Ask 上一行" 整行左移 2 列。
+      p.term.write(line + '\n');
     }
   }
   // 残余无换行的内容：标记开头则等完整行，否则直接渲染（保持交互性）
@@ -595,8 +598,11 @@ function writeChunk(p, text) {
   }
 }
 
-// 同步输出 (DECSET 2026) 处理：不做帧缓冲 shim，直接剥离序列做原生增量渲染。
-// 序列长度：\x1b[?2026h / \x1b[?2026l 均为 8 字节；可能跨 16KB 分块截断，仅在结尾疑似前缀时暂存尾巴
+// 同步输出 (DECSET 2026) 处理：帧缓冲 shim（旧版，从备份 bundle 恢复）。
+// 2026h/l 各 8 字节，可能跨 16KB 分块截断，仅在结尾疑似前缀时暂存尾巴。
+// 帧内内容进 syncBuf，2026l 闭合时整帧一次提交（保留帧缓冲性能，输入不卡）。
+// 已修复：sync 帧内跨块内容此前绕过 syncBuf 直接渲染，帧内转义序列被 16KB 分块
+// 截断成字面文本/错位（opencode 欢迎界面错行）；现在 syncOn 期间统一进帧缓冲。
 const SYNC_SEQ = ['\x1b[?2026h', '\x1b[?2026l', '\x1b[?2026', '\x1b[?202', '\x1b[?20', '\x1b[?2', '\x1b[?', '\x1b['];
 const SYNC_LEN = 8;
 
@@ -613,17 +619,65 @@ function onShellOutput(sid, text) {
   const combined = p.syncTail + text;
   p.syncTail = '';
 
-  // 策略：不做 2026 同步帧缓冲，直接剥离同步序列，只保留质朴的原生增量渲染。
-  // \x1b[?2026h/l 只是"整帧绘制"的性能提示；剥离后内容照常逐块显示，
-  // 没有乱序/花屏问题（代价是 TUI 可能偶发绘制闪烁，可接受）。
-  const cleaned = combined.replace(/\x1b\[\?2026[hl]/g, '');
-  // 跨块截断的序列尾巴仍需暂存（序列可能被 16KB 分块切成两半）
-  const tail = trailingSyncTail(cleaned);
-  if (tail) {
-    p.syncTail = cleaned.slice(-tail);
-    writeChunk(p, cleaned.slice(0, -tail));
-  } else {
-    writeChunk(p, cleaned);
+  if (!combined.includes('\x1b[?2026')) {
+    if (p.syncOn) {
+      // 仍在同步帧内：整段进帧缓冲，帧闭合（2026l）时统一提交（与下方
+      // syncOn 分支一致，避免帧内容跨分块时被直接渲染而错位）。
+      const tail = trailingSyncTail(combined);
+      if (tail) {
+        p.syncBuf += combined.slice(0, -tail);
+        p.syncTail = combined.slice(-tail);
+      } else {
+        p.syncBuf += combined;
+      }
+      return;
+    }
+    const tail = trailingSyncTail(combined);
+    if (tail) {
+      p.syncTail = combined.slice(-tail);
+      writeChunk(p, combined.slice(0, -tail));
+    } else {
+      writeChunk(p, combined);
+    }
+    return;
+  }
+
+  let rest = combined;
+  let guard = 0;
+  while (rest.length && guard++ < 2000) {
+    if (p.syncOn) {
+      const end = rest.indexOf('\x1b[?2026l');
+      if (end === -1) {
+        const tail = trailingSyncTail(rest);
+        if (tail) {
+          p.syncBuf += rest.slice(0, -tail);
+          p.syncTail = rest.slice(-tail);
+        } else {
+          p.syncBuf += rest;
+        }
+        break;
+      }
+      p.syncBuf += rest.slice(0, end);
+      p.syncOn = false;
+      writeChunk(p, p.syncBuf);
+      p.syncBuf = '';
+      rest = rest.slice(end + SYNC_LEN);
+    } else {
+      const start = rest.indexOf('\x1b[?2026h');
+      if (start === -1) {
+        const tail = trailingSyncTail(rest);
+        if (tail) {
+          writeChunk(p, rest.slice(0, -tail));
+          p.syncTail = rest.slice(-tail);
+        } else {
+          writeChunk(p, rest);
+        }
+        break;
+      }
+      writeChunk(p, rest.slice(0, start));
+      p.syncOn = true;
+      rest = rest.slice(start + SYNC_LEN);
+    }
   }
 }
 
