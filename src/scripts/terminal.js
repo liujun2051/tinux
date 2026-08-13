@@ -90,7 +90,17 @@ function createPanel(id) {
   // 启动会话
   panel.starting = true;
   invoke('shell_start', { sessionId: id, rows: term.rows, cols: term.cols })
-    .then(() => { panel.starting = false; })
+    .then(() => {
+      panel.starting = false;
+      // 会话就绪后校准尺寸：首次 fit 时容器可能未定型（行数偏小/偏大），
+      // 且 shell_start 完成前的 shell_resize 会被后端静默丢弃（竞态），
+      // 导致 ConPTY 尺寸与前端不一致（如 stty 报 24 行、实际 23 行），
+      // 清屏（clear）只清 ConPTY 视口、前端画面留残影。这里补一次对齐。
+      requestAnimationFrame(() => {
+        try { panel.fit.fit(); } catch (_) { /* 尺寸未就绪 */ }
+        invoke('shell_resize', { sessionId: id, rows: term.rows, cols: term.cols });
+      });
+    })
     .catch((err) => {
       panel.starting = false;
       term.write(`\r\n\x1b[31m${t('shell.startFail', err)}\x1b[0m\r\n`);
@@ -697,7 +707,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('agents-close').addEventListener('click', closeAgents);
 
   // 版本号（构建时间戳，精确到秒）
-  const BUILD_TS = '2026-08-13 11:48:40';
+  const BUILD_TS = '2026-08-13 12:09:10';
   try {
     const ver = await window.__TAURI__.app.getVersion();
     document.getElementById('titlebar-version').textContent = `v${ver} · ${BUILD_TS}`;
