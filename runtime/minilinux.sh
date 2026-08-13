@@ -9,6 +9,12 @@
 # 交互提示符
 PS1='mini:\w\$ '
 
+# clear：先重置滚动区域再清屏。全屏 TUI（opencode/vi/less 等）异常退出时可能
+# 残留 \x1b[1;NNr（滚动区域只占上半屏），导致 clear 只清 region 内。
+clear() {
+  printf '\033[r\033[2J\033[H'
+}
+
 # TMPDIR：busybox-w32 没有 /tmp，安装器（mktemp -d ${TMPDIR:-/tmp}/...）会失败
 export TMPDIR="${TMPDIR:-$HOME/tmp}"
 mkdir -p "$TMPDIR" 2>/dev/null || true

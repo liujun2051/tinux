@@ -60,6 +60,9 @@ pub struct WinBox {
     // 需用 ANSI 版 busybox-ansi.exe（无 UTF-8 manifest，也无 GetACP 检查）
     ansi: bool,
     sessions: Mutex<HashMap<String, ShellSession>>,
+    // shell_start 完成前到达的 resize 尺寸（session_id -> (rows, cols)）。
+    // 竞态兜底：会话创建后补应用，避免 ConPTY 停在初始尺寸导致 clear 只清半屏。
+    pending_resize: Mutex<HashMap<String, (u16, u16)>>,
 }
 
 impl WinBox {
@@ -69,6 +72,7 @@ impl WinBox {
             root,
             ansi,
             sessions: Mutex::new(HashMap::new()),
+            pending_resize: Mutex::new(HashMap::new()),
         }
     }
 
@@ -182,11 +186,23 @@ impl WinBox {
             let _ = app2.emit_all("shell-exit", ShellExit { session_id: sid2 });
         });
 
-        self.sessions_mut().insert(sid, ShellSession {
+        self.sessions_mut().insert(sid.clone(), ShellSession {
             master: pair.master,
             writer,
             child,
         });
+        // 补应用会话创建前到达的 resize（竞态兜底：resize 先于 shell_start 完成时
+        // 暂存在 pending_resize，这里补上，确保 ConPTY 尺寸与前端一致）
+        if let Some((r, c)) = self.pending_resize_mut().remove(&sid) {
+            if let Some(s) = self.sessions_mut().get_mut(&sid) {
+                let _ = s.master.resize(PtySize {
+                    rows: r,
+                    cols: c,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                });
+            }
+        }
         Ok(())
     }
 
@@ -212,8 +228,18 @@ impl WinBox {
                     pixel_height: 0,
                 })
                 .map_err(|e| e.to_string())?;
+        } else {
+            // 会话尚未创建（shell_start 异步未完成）：暂存尺寸，创建后补应用。
+            // 否则 resize 被静默丢弃，ConPTY 停在初始尺寸（如 24 行），
+            // 前端行数更多时 clear 等只清 ConPTY 视口 = "只清半屏"。
+            self.pending_resize_mut().insert(session_id.to_string(), (rows, cols));
         }
         Ok(())
+    }
+
+    // pending_resize 锁（容忍中毒）
+    fn pending_resize_mut(&self) -> std::sync::MutexGuard<'_, HashMap<String, (u16, u16)>> {
+        self.pending_resize.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     // 停止指定会话
