@@ -20,8 +20,18 @@ if errorlevel 1 goto :err
 echo [2/4] Downloading Python (embeddable)...
 curl -fsSL -o "%TEMP%\python-embed.zip" https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
 if errorlevel 1 goto :err
-tar -xf "%TEMP%\python-embed.zip" -C winbox\bin
+mkdir winbox\bin\python 2>nul
+tar -xf "%TEMP%\python-embed.zip" -C winbox\bin\python
 del "%TEMP%\python-embed.zip" 2>nul
+rem 自包含 python 启动器：把 embed 的 dll/_pth 放到 bin\ 下（python.exe 在 bin\，
+rem python312._pth 指向 python\ 子目录），不依赖系统 PATH 里的 Python312，
+rem 否则目标机器无系统 Python 时 "python" 报 0xc0000135（缺 DLL）。
+copy /y winbox\bin\python\python.exe winbox\bin\ >nul 2>&1
+copy /y winbox\bin\python\python312.dll winbox\bin\ >nul
+copy /y winbox\bin\python\python3.dll winbox\bin\ >nul
+copy /y winbox\bin\python\vcruntime140.dll winbox\bin\ >nul
+copy /y winbox\bin\python\vcruntime140_1.dll winbox\bin\ >nul
+(echo python/python312.zip& echo python/) > winbox\bin\python312._pth
 
 echo [3/4] Downloading Node.js...
 curl -fsSL -o "%TEMP%\node.zip" https://nodejs.org/dist/v25.9.0/node-v25.9.0-win-x64.zip

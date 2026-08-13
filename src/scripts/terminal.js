@@ -697,7 +697,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('agents-close').addEventListener('click', closeAgents);
 
   // 版本号（构建时间戳，精确到秒）
-  const BUILD_TS = '2026-08-13 10:15:23';
+  const BUILD_TS = '2026-08-13 11:48:40';
   try {
     const ver = await window.__TAURI__.app.getVersion();
     document.getElementById('titlebar-version').textContent = `v${ver} · ${BUILD_TS}`;
