@@ -59,7 +59,7 @@ function createPanel(id) {
     });
   }
 
-  const panel = { id, term, fit, container, outBuf: '', exited: false, starting: false, syncOn: false, syncBuf: '', syncTail: '' };
+  const panel = { id, term, fit, container, outBuf: '', exited: false, starting: false, pendingStart: true, syncOn: false, syncBuf: '', syncTail: '' };
   panels.set(id, panel);
 
   // 输入 → 对应会话（退出后按任意键重启，防重入）
@@ -87,26 +87,35 @@ function createPanel(id) {
   // 点击聚焦
   container.addEventListener('mousedown', () => focusPanel(id));
 
-  // 启动会话
-  panel.starting = true;
-  invoke('shell_start', { sessionId: id, rows: term.rows, cols: term.cols })
+  // 会话启动改为"等字符尺寸就绪后"再发起（见 ensureSessionStarted），
+  // 由挂载后的 robustFit / 2s 超时兜底触发，ConPTY 初始即用真实尺寸，
+  // 避免先以默认 24x80 创建再 resize 的瞬态（tab 显示 24x80 的窗口期）。
+  // 兜底：2s 内未就绪也启动（先用当前尺寸，就绪后 robustFit 会 resize）
+  setTimeout(() => ensureSessionStarted(panel), 2000);
+
+  return panel;
+}
+
+// 启动 panel 的 shell 会话（幂等：pendingStart 标志防止重复）
+function ensureSessionStarted(p) {
+  if (!p || !p.pendingStart || p.starting || p.exited) return;
+  p.pendingStart = false;
+  p.starting = true;
+  invoke('shell_start', { sessionId: p.id, rows: p.term.rows, cols: p.term.cols })
     .then(() => {
-      panel.starting = false;
+      p.starting = false;
       // 会话就绪后校准尺寸：首次 fit 时容器可能未定型（行数偏小/偏大），
       // 且 shell_start 完成前的 shell_resize 会被后端静默丢弃（竞态），
       // 导致 ConPTY 尺寸与前端不一致（如 stty 报 24 行、实际 23 行），
       // 清屏（clear）只清 ConPTY 视口、前端画面留残影。这里补一次对齐。
       requestAnimationFrame(() => {
-        try { panel.fit.fit(); } catch (_) { /* 尺寸未就绪 */ }
-        invoke('shell_resize', { sessionId: id, rows: term.rows, cols: term.cols });
+        try { robustFit(p); } catch (_) { /* 尺寸未就绪 */ }
       });
     })
     .catch((err) => {
-      panel.starting = false;
-      term.write(`\r\n\x1b[31m${t('shell.startFail', err)}\x1b[0m\r\n`);
+      p.starting = false;
+      p.term.write(`\r\n\x1b[31m${t('shell.startFail', err)}\x1b[0m\r\n`);
     });
-
-  return panel;
 }
 
 // 聚焦某个 panel
@@ -284,6 +293,9 @@ function robustFit(p) {
   try {
     invoke('shell_resize', { sessionId: p.id, rows: p.term.rows, cols: p.term.cols });
   } catch (_) { /* 后端未就绪时由 pending_resize 兜底 */ }
+  // 字符尺寸就绪 + fit 完成：此刻 term.rows 是真实尺寸，可以启动会话了
+  // （ConPTY 初始即用真实尺寸，避免 24x80 瞬态；幂等，2s 兜底仍有效）
+  ensureSessionStarted(p);
   return true;
 }
 
@@ -756,7 +768,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('agents-close').addEventListener('click', closeAgents);
 
   // 版本号（构建时间戳，精确到秒）
-  const BUILD_TS = '2026-08-13 13:26:18';
+  const BUILD_TS = '2026-08-13 14:10:24';
   try {
     const ver = await window.__TAURI__.app.getVersion();
     document.getElementById('titlebar-version').textContent = `v${ver} · ${BUILD_TS}`;
