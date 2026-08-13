@@ -49,6 +49,11 @@
       "resources": {
         "../winbox-dist": "winbox",
         "WebView2Loader.dll": "."
+      },
+      "windows": {
+        "webviewInstallMode": {
+          "type": "skip"
+        }
       }
     }
   }
