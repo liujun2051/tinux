@@ -3207,7 +3207,7 @@ dependencies = [
 
 [[package]]
 name = "tinux"
-version = "0.2.0"
+version = "0.2.10"
 dependencies = [
  "encoding_rs",
  "lazy_static",
