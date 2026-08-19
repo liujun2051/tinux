@@ -1,6 +1,6 @@
 [package]
 name = "tinux"
-version = "0.2.10"
+version = "0.2.12"
 description = "Windows 上的 Linux shell，无需安装 WSL。支持 openclaw、codex、claude code、hermes、kimi code 等 AI agent。"
 authors = ["爸爸", "飞儿"]
 license = "MIT"
@@ -18,6 +18,8 @@ encoding_rs = "0.8"
 portable-pty = "0.9.0"
 # 读取 Windows 显示语言（前端文案本地化）+ 枚举系统字体
 winapi = { version = "0.3", features = ["winnls", "wingdi", "winuser"] }
+# 诊断用：直接调 Win32 API（GetClientRect/IsIconic 等）交叉验证窗口状态；与 tauri 内部依赖版本一致，类型互通
+windows = { version = "0.39", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [features]
 default = ["custom-protocol"]

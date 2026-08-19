@@ -131,13 +131,16 @@ impl WinBox {
         let node_dir = self.root.join("bin").join("nodejs").to_string_lossy().replace('\\', "/");
         let app_dir = self.root.join("app").to_string_lossy().replace('\\', "/");
         let local_bin = self.root.join("app").join(".local").join("bin").to_string_lossy().replace('\\', "/");
+        // MinGit（kimi 等 agent 的 git 命令）：winbox/bin/git/cmd
+        let git_cmd = self.root.join("bin").join("git").join("cmd").to_string_lossy().replace('\\', "/");
         let shim = self.root.join("usr").join("lib").join("minilinux.sh");
         cmd.env(
             "PATH",
             format!(
-                "{};{};{};{}",
+                "{};{};{};{};{}",
                 bin_dir,
                 node_dir,
+                git_cmd,
                 local_bin,
                 std::env::var("PATH").unwrap_or_default()
             ),
@@ -159,6 +162,10 @@ impl WinBox {
         cmd.env("TMPDIR", tmp_dir.to_string_lossy().replace('\\', "/"));
         // ENV：busybox ash 交互模式启动时自动 source 伪装层（uname → Linux、PS1）
         cmd.env("ENV", shim.to_string_lossy().replace('\\', "/"));
+        // kimi-code：要求 msys 路径语义的 bash.exe（手术版 busybox 的 bash 别名，见 README）
+        let bash_path = self.root.join("bin").join("bash.exe").to_string_lossy().replace('\\', "/");
+        cmd.env("KIMI_SHELL_PATH", &bash_path);
+        cmd.env("SHELL", &bash_path);
         cmd.cwd(self.root.join("app"));
 
         let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
@@ -356,12 +363,15 @@ impl WinBox {
         let node_dir = self.root.join("bin").join("nodejs").to_string_lossy().replace('\\', "/");
         let app_dir = self.root.join("app").to_string_lossy().replace('\\', "/");
         let local_bin = self.root.join("app").join(".local").join("bin").to_string_lossy().replace('\\', "/");
+        let git_cmd = self.root.join("bin").join("git").join("cmd").to_string_lossy().replace('\\', "/");
+        let bash_path = self.root.join("bin").join("bash.exe").to_string_lossy().replace('\\', "/");
         let tmp_dir = self.root.join("app").join("tmp");
         let _ = std::fs::create_dir_all(&tmp_dir);
         let path = format!(
-            "{};{};{};{}",
+            "{};{};{};{};{}",
             bin_dir,
             node_dir,
+            git_cmd,
             local_bin,
             std::env::var("PATH").unwrap_or_default()
         );
@@ -375,6 +385,8 @@ impl WinBox {
             .env("UV_TOOL_BIN_DIR", &bin_dir)
             .env("npm_config_prefix", &node_dir)
             .env("npm_config_cache", format!("{}/.npm-cache", app_dir))
+            .env("KIMI_SHELL_PATH", &bash_path)
+            .env("SHELL", &bash_path)
             .current_dir(self.root.join("app"))
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -453,10 +465,13 @@ impl WinBox {
         let bin_dir = self.root.join("bin").to_string_lossy().replace('\\', "/");
         let node_dir = self.root.join("bin").join("nodejs").to_string_lossy().replace('\\', "/");
         let app_dir = self.root.join("app").to_string_lossy().replace('\\', "/");
+        let git_cmd = self.root.join("bin").join("git").join("cmd").to_string_lossy().replace('\\', "/");
+        let bash_path = self.root.join("bin").join("bash.exe").to_string_lossy().replace('\\', "/");
         let path = format!(
-            "{};{};{}",
+            "{};{};{};{}",
             bin_dir,
             node_dir,
+            git_cmd,
             std::env::var("PATH").unwrap_or_default()
         );
 
@@ -468,6 +483,8 @@ impl WinBox {
                 .env("USERPROFILE", &app_dir)
                 .env("npm_config_prefix", &node_dir)
                 .env("npm_config_cache", format!("{}/.npm-cache", app_dir))
+                .env("KIMI_SHELL_PATH", &bash_path)
+                .env("SHELL", &bash_path)
                 .args(["sh", "-c", &shim_arg])
                 .current_dir(self.root.join("app"))
                 .output()
@@ -477,6 +494,8 @@ impl WinBox {
                 .env("PATH", &path)
                 .env("HOME", &app_dir)
                 .env("USERPROFILE", &app_dir)
+                .env("KIMI_SHELL_PATH", &bash_path)
+                .env("SHELL", &bash_path)
                 .args(["-c", &shim_arg])
                 .current_dir(self.root.join("app"))
                 .output()

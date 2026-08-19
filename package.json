@@ -1,6 +1,6 @@
 {
   "name": "tinux",
-  "version": "0.2.10",
+  "version": "0.2.12",
   "description": "Windows 上的 Linux shell，无需安装 WSL。支持 openclaw、codex、claude code、hermes、kimi code 等 AI agent。",
   "scripts": {
     "tauri": "tauri",

@@ -1,5 +1,24 @@
 # tinux 修复日志
 
+## v0.2.12（未发布）
+- **kimi 在无 Git 机器上可运行（busybox 手术 + MinGit）**：
+  - 根因：kimi-code 的 Bash tool 生成 `bash -c "cd '/d/...' && cmd"`（msys 路径语义），
+    只在 Git Bash/MSYS2 下成立；busybox-w32 无 `/d/` 驱动映射（`/e/` 解析成 `E:\e`）
+  - 手术：改 busybox-w32 源码 shell/ash.c `updatepwd()`，`/^\/[A-Za-z](?:\/|$)/` → `X:/...`
+    （复用已有 ABS_DRIVE/get_drive_cwd 基建）；mingw64 重建 u + ANSI 两个变体
+    （179 applets 与 frippery FRP-6075 零差异）
+  - MinGit 2.55.0.4（89MB）入包 winbox/bin/git/，PATH 注入 git/cmd → tinux 里 `git` 可用
+  - winbox.rs 三处 env 注入 KIMI_SHELL_PATH/SHELL → winbox/bin/bash.exe（ANSI busybox 别名）
+  - 已知限制：SHELL 被 busybox ash 覆盖为 /bin/sh，kimi 内置终端（node-pty）仍不可用；
+    init.bat 重建运行时仍下载原版 busybox（手术版随安装包分发）
+
+## v0.2.11（未发布）
+- **修复 Windows Server 2019 安装后自动退出**：v0.2.2 起 webviewInstallMode 改为 skip
+  （安装包不装 WebView2，保体积 ~53MB），但 Server 2019 默认不带 WebView2 Runtime
+  （仅 Win11 内置，Server 不走消费者 Windows Update 渠道）→ tauri 创建 WebView2 失败
+  → 进程无提示静默退出。已改回 downloadBootstrapper（安装时检测缺失则联网静默安装），
+  恢复 v0.2.2 之前行为；离线服务器需手动预装 WebView2 Runtime
+
 ## v0.2.10（2026-08-14）
 - **移除 telnetd 服务**：删除 runtime/telnetd.py + telnetd.bat，停止守护进程并清理防火墙规则（安装包不再附带 2323 端口服务）
 
